@@ -170,7 +170,11 @@ class Obstacle_Avoidance_Jackal_Kinova(gym.Env):
         robot_coords = np.array([rs_state[RS_ROBOT_POSE], rs_state[RS_ROBOT_POSE + 1]])
         euclidean_dist_2d = np.linalg.norm(target_coords - robot_coords, axis=-1)
 
-        base_reward = -100 * euclidean_dist_2d
+        if euclidean_dist_2d < 2.0:
+            base_reward = -200 * euclidean_dist_2d
+        else:
+            base_reward = -100 * euclidean_dist_2d
+
         if self.prev_base_reward is not None:
             reward = base_reward - self.prev_base_reward
         self.prev_base_reward = base_reward
@@ -576,7 +580,7 @@ class Obstacle_Avoidance_Jackal_Kinova(gym.Env):
 
 
 class Obstacle_Avoidance_Jackal_Kinova_Sim(Obstacle_Avoidance_Jackal_Kinova, Simulation):
-    cmd = "roslaunch jackal_kinova_robot_server sim_robot_server.launch world_name:=obst_4_6by9.world"
+    cmd = "roslaunch jackal_kinova_robot_server sim_robot_server.launch world_name:=lab_6by9_obst_3.world"
 
     def __init__(self, ip=None, lower_bound_port=None, upper_bound_port=None, gui=True, **kwargs):
         Simulation.__init__(self, self.cmd, ip, lower_bound_port, upper_bound_port, gui, **kwargs)
