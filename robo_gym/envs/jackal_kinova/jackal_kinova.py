@@ -514,8 +514,8 @@ class No_Obstacle_Avoidance_Jackal_Kinova(gym.Env):
         """
 
         # Dimensions of boundary box in m, the box center corresponds to the map origin
-        width = 20
-        height = 14
+        width = 9
+        height = 6
 
         if (
             robot_coordinates[0] < -2
