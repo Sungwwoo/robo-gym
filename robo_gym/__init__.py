@@ -38,6 +38,15 @@ register(
 
 # Jackal_Kinova
 register(
+    id="No_Obstacle_Avoidance_Jackal_Kinova_Sim-v0",
+    entry_point="robo_gym.envs:No_Obstacle_Avoidance_Jackal_Kinova_Sim",
+)
+
+register(
+    id="No_Obstacle_Avoidance_Jackal_Kinova_Rob-v0",
+    entry_point="robo_gym.envs:No_Obstacle_Avoidance_Jackal_Kinova_Rob",
+)
+register(
     id="Obstacle_Avoidance_Jackal_Kinova_Sim-v0",
     entry_point="robo_gym.envs:Obstacle_Avoidance_Jackal_Kinova_Sim",
 )

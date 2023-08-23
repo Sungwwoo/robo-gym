@@ -15,6 +15,8 @@ from robo_gym.envs.husky_ur3.husky_ur3 import (
 
 # jackal_kinova
 from robo_gym.envs.jackal_kinova.jackal_kinova import (
+    No_Obstacle_Avoidance_Jackal_Kinova_Sim,
+    No_Obstacle_Avoidance_Jackal_Kinova_Rob,
     Obstacle_Avoidance_Jackal_Kinova_Sim,
     Obstacle_Avoidance_Jackal_Kinova_Rob,
 )
