@@ -5,13 +5,15 @@ from stable_baselines3 import PPO
 import os
 
 # specify the ip of the machine running the robot-server
-target_machine_ip = "127.0.0.1"  # or other xxx.xxx.xxx.xxx
+target_machine_ip = "192.168.0.32"  # or other xxx.xxx.xxx.xxx
 
-env = gym.make("Obstacle_Avoidance_Jackal_Kinova_Sim-v0", ip=target_machine_ip, gui=True)
+env = gym.make(
+    "No_Obstacle_Avoidance_Jackal_Kinova_Sim-v0", ip=target_machine_ip, gui=True
+)
 env.reset()
 
-models_dir = "models/jackal_3obs_PPO"
-model_path = f"{models_dir}/745000.zip"
+models_dir = "models/no_obst_e2e_rl_PPO_2"
+model_path = f"{models_dir}/165000"
 
 model = PPO.load(model_path, env=env)
 
