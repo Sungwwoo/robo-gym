@@ -75,6 +75,7 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
         max_ang_vel = self.jackal_kinova.get_max_ang_vel()
         self.max_vel = np.array([max_lin_vel, max_ang_vel])
 
+        self.episode_start_time = 0.0
         self.prev_lin_vel = 0.0
         self.prev_ang_vel = 0.0
         self.prev_rostime = 0.0
@@ -115,6 +116,7 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
 
         self.prev_lin_vel = 0.0
         self.prev_ang_vel = 0.0
+        self.episode_start_time = 0.0
         self.prev_rostime = 0.0
 
         # Initialize environment state
@@ -187,6 +189,7 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
 
         if self.prev_rostime == 0.0:
             self.prev_rostime = rs_state[RS_ROSTIME]
+            self.episode_start_time = rs_state[RS_ROSTIME]
         else:
             if self.acc_penalty > -200:
                 # High acceleration
@@ -243,6 +246,7 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
             reward = 300
             done = True
             info["final_status"] = "success"
+            info["elapsed_time"] = rs_state[RS_ROSTIME] - self.episode_start_time
             print("Target Reached!")
             print("Episode Length: ", str(self.elapsed_steps))
 
