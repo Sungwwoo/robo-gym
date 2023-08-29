@@ -56,7 +56,7 @@ class No_Obstacle_Avoidance_Jackal_Kinova(gym.Env):
 
     real_robot = False
     laser_len = 811
-    max_episode_steps = 512
+    max_episode_steps = 128
 
     def __init__(self, rs_address=None, **kwargs):
         self.jackal_kinova = jackal_kinova_utils.Jackal_Kinova()
@@ -169,21 +169,27 @@ class No_Obstacle_Avoidance_Jackal_Kinova(gym.Env):
         target_coords = np.array([rs_state[RS_TARGET], rs_state[RS_TARGET + 1]])
         robot_coords = np.array([rs_state[RS_ROBOT_POSE], rs_state[RS_ROBOT_POSE + 1]])
         euclidean_dist_2d = np.linalg.norm(target_coords - robot_coords, axis=-1)
+        # print("Target coordinate: {:.3f}, {:.3f}".format(rs_state[RS_TARGET], rs_state[RS_TARGET + 1]))
+        # print("Robot coordinate: {:.3f}, {:.3f}".format(rs_state[RS_ROBOT_POSE], rs_state[RS_ROBOT_POSE + 1]))
 
-        if euclidean_dist_2d < 2.0:
-            base_reward = -200 * euclidean_dist_2d
-        else:
-            base_reward = -100 * euclidean_dist_2d
+        # self.state[0]: Euclidean distance to goal
+        # self.state[1]: Heading error
+        base_reward = -70 * euclidean_dist_2d
 
         if self.prev_base_reward is not None:
             reward = base_reward - self.prev_base_reward
         self.prev_base_reward = base_reward
 
+        if abs(self.state[1]) > np.pi / 2:
+            reward += 1
+        else:
+            reward -= 1
+
         # Negative rewards
 
         # Power used by the motors
-        linear_power = abs(action[0] * 0.125)
-        angular_power = abs(action[1] * 0.05)
+        linear_power = abs(action[0] * 0.15)
+        angular_power = abs(action[1] * 0.3)
         reward -= linear_power
         reward -= angular_power
 
@@ -215,33 +221,29 @@ class No_Obstacle_Avoidance_Jackal_Kinova(gym.Env):
         self.prev_ang_vel = rs_state[RS_ROBOT_TWIST + 1]
 
         # Long path length (episode length)
-        # reward = reward - 0.003 * self.elapsed_steps
+        # reward -= 1.3
 
         if not self.real_robot:
             # End episode if robot is collides with an object.
             if self._sim_robot_collision(rs_state):
-                reward = -200.0
+                reward = -10.0
                 done = True
                 info["final_status"] = "collision"
                 print("collision occured")
                 print("Episode Length: ", str(self.elapsed_steps))
 
-            if self._min_laser_reading_below_threshold(rs_state):
-                reward = -200.0
-                done = True
-                info["final_status"] = "front collision"
-                print("front blocked")
-                print("Episode Length: ", str(self.elapsed_steps))
+            # if self._min_laser_reading_below_threshold(rs_state):
+            #     reward -= 0.3
 
             if self._robot_outside_of_boundary_box(rs_state[RS_ROBOT_POSE : RS_ROBOT_POSE + 3]):
-                reward = -200.0
+                reward = -10.0
                 done = True
                 info["final_status"] = "out of boundary"
                 print("Robot out of boundary")
 
         # Target Reached
         if euclidean_dist_2d < self.distance_threshold:
-            reward = 300
+            reward = 10
             done = True
             info["final_status"] = "success"
             info["elapsed_time"] = rs_state[RS_ROSTIME] - self.episode_start_time
@@ -357,9 +359,9 @@ class No_Obstacle_Avoidance_Jackal_Kinova(gym.Env):
                 y = self.np_random.uniform(low=-2.7, high=-2.1)
             else:
                 y = self.np_random.uniform(low=2.1, high=2.7)
-            yaw = self.np_random.uniform(low=-np.pi, high=np.pi)
+            yaw = self.np_random.uniform(low=-np.pi / 3, high=np.pi / 3)
 
-            x, y, yaw = 0, 0, 0
+            x, y = 0, 0
             start_pose = [x, y, yaw]
 
         return start_pose
@@ -375,7 +377,7 @@ class No_Obstacle_Avoidance_Jackal_Kinova(gym.Env):
 
         """
 
-        x_t = self.np_random.uniform(low=7, high=7.5)
+        x_t = self.np_random.uniform(low=3.0, high=7.5)
         y_t = self.np_random.uniform(low=-2.1, high=2.1)
         yaw_t = 0.0
         # target_dist = np.linalg.norm(np.array([x_t, y_t]) - np.array(robot_coordinates[0:2]), axis=-1)
@@ -397,14 +399,13 @@ class No_Obstacle_Avoidance_Jackal_Kinova(gym.Env):
 
         # Transform cartesian coordinates of target to polar coordinates
         polar_r, polar_theta = utils.cartesian_to_polar_2d(
-            x_target=rs_state[0],
-            y_target=rs_state[1],
-            x_origin=rs_state[3],
-            y_origin=rs_state[4],
+            x_target=rs_state[RS_TARGET],
+            y_target=rs_state[RS_TARGET + 1],
+            x_origin=rs_state[RS_ROBOT_POSE],
+            y_origin=rs_state[RS_ROBOT_POSE + 1],
         )
         # Rotate origin of polar coordinates frame to be matching with robot frame and normalize to +/- pi
-        polar_theta = utils.normalize_angle_rad(polar_theta - rs_state[5])
-
+        polar_theta = utils.normalize_angle_rad(polar_theta - rs_state[RS_ROBOT_POSE + 2])
         # Get Laser scanners data
         raw_laser_scan = rs_state[RS_SCAN : RS_SCAN + self.laser_len]
 
@@ -491,7 +492,7 @@ class No_Obstacle_Avoidance_Jackal_Kinova(gym.Env):
 
         """
 
-        threshold = 0.05
+        threshold = 0.3
         if min(rs_state[RS_SCAN : RS_SCAN + self.laser_len]) < threshold:
             return True
         else:
@@ -627,7 +628,7 @@ class Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova):
         rs_state[RS_TARGET : RS_TARGET + 3] = target_pose
 
         # Generate obstacles positions
-        self._generate_obstacles_positions()
+        self._generate_obstacles_positions(rs_state)
         for i in range(0, NUM_OBSTACLES):
             rs_state[RS_OBSTACLES + 3 * i : RS_OBSTACLES + 3 * (i + 1)] = self.sim_obstacles[i]
 
@@ -663,11 +664,12 @@ class Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova):
         target_coords = np.array([rs_state[RS_TARGET], rs_state[RS_TARGET + 1]])
         robot_coords = np.array([rs_state[RS_ROBOT_POSE], rs_state[RS_ROBOT_POSE + 1]])
         euclidean_dist_2d = np.linalg.norm(target_coords - robot_coords, axis=-1)
+        # print("Target coordinate: {:.3f}, {:.3f}".format(rs_state[RS_TARGET], rs_state[RS_TARGET + 1]))
+        # print("Distance: {:.3f}".format(euclidean_dist_2d))
+        # print("Robot heading: {:.3f}".format(rs_state[RS_ROBOT_POSE + 2]))
+        # print("Heading Error:: {:.3f}".format(self.state[1]))
 
-        if euclidean_dist_2d < 2.0:
-            base_reward = -200 * euclidean_dist_2d
-        else:
-            base_reward = -100 * euclidean_dist_2d
+        base_reward = -50 * ((2 / euclidean_dist_2d) ** 2)
 
         if self.prev_base_reward is not None:
             reward = base_reward - self.prev_base_reward
@@ -678,6 +680,7 @@ class Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova):
         #     self.zero_vel_penalty = self.zero_vel_penalty - 5
         #     reward = reward - 5
 
+        reward += (3.14 - self.state[1]) / 3.14
         # Power used by the motors
         linear_power = abs(action[0] * 0.125)
         angular_power = abs(action[1] * 0.05)
@@ -708,7 +711,7 @@ class Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova):
         self.prev_ang_vel = rs_state[RS_ROBOT_TWIST + 1]
 
         # Long path length (episode length)
-        # reward = reward - 0.003 * self.elapsed_steps
+        # reward -= 0.5
 
         if not self.real_robot:
             # Negative reward if robot is too close to the obstacles
@@ -742,7 +745,7 @@ class Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova):
 
         # Target Reached
         if euclidean_dist_2d < self.distance_threshold:
-            reward = 300
+            reward = 200
             done = True
             info["final_status"] = "success"
             info["elapsed_time"] = rs_state[RS_ROSTIME] - self.episode_start_time
@@ -840,7 +843,7 @@ class Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova):
 
         return robot_close_to_obstacle
 
-    def _generate_obstacles_positions(self):
+    def _generate_obstacles_positions(self, rs_state):
         """Generate random positions for n obstacles.
 
         Used only for simulated Robot Server.
@@ -848,24 +851,33 @@ class Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova):
         """
 
         self.sim_obstacles = []
-        for i in range(0, NUM_OBSTACLES):
+        i = 0
+        while i < NUM_OBSTACLES:
             pose = self.generate_pos()
-            while not self.is_valid_obstacle(pose):
+            count = 0
+            while not self.is_valid_obstacle(pose, rs_state):
+                count += 1
                 pose = self.generate_pos()
+                if count > 100:
+                    i -= 1
+                    self.sim_obstacles.pop()
             self.sim_obstacles.append(pose)
+            i += 1
 
     def generate_pos(self):
-        x = self.np_random.uniform(low=3.0, high=6.0)
+        x = self.np_random.uniform(low=3.0, high=8.0)
         y = self.np_random.uniform(low=-2.1, high=2.1)
         yaw = self.np_random.uniform(low=-np.pi, high=np.pi)
         return [x, y, yaw]
 
-    def is_valid_obstacle(self, obst_pose):
+    def is_valid_obstacle(self, obst_pose, rs_state):
         if len(self.sim_obstacles) == 0:
             return True
         else:
             for i in range(0, len(self.sim_obstacles)):
                 if np.sqrt((self.sim_obstacles[i][0] - obst_pose[0]) ** 2 + (self.sim_obstacles[i][1] - obst_pose[1]) ** 2) < DIST_BTW_OBSTACLES:
+                    return False
+                if np.sqrt((self.sim_obstacles[i][0] - rs_state[RS_TARGET]) ** 2 + (self.sim_obstacles[i][1] - rs_state[RS_TARGET + 1]) ** 2) < 0.5:
                     return False
             return True
 
