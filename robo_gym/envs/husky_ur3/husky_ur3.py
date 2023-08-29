@@ -12,6 +12,14 @@ from robo_gym.envs.simulation_wrapper import Simulation
 from robo_gym_server_modules.robot_server.grpc_msgs.python import robot_server_pb2
 
 
+RS_TARGET = 0
+RS_ROBOT_POSE = RS_TARGET + 3
+RS_ROBOT_TWIST = RS_ROBOT_POSE + 3
+RS_SCAN = RS_ROBOT_TWIST + 2
+RS_COLLISION = RS_SCAN + 609
+RS_OBSTACLES = RS_COLLISION + 1
+
+
 class Husky_ur3_Env(gym.Env):
     """Mobile Industrial Robots Husky_ur3 base environment.
 
@@ -86,14 +94,14 @@ class Husky_ur3_Env(gym.Env):
         else:
             start_pose = self._get_start_pose()
 
-        rs_state[3:6] = start_pose
+        rs_state[RS_ROBOT_POSE : RS_ROBOT_POSE + 3] = start_pose
 
         # Set target position
         if target_pose:
             assert len(target_pose) == 3
         else:
             target_pose = self._get_target(start_pose)
-        rs_state[0:3] = target_pose
+        rs_state[RS_TARGET : RS_TARGET + 3] = target_pose
 
         # Set initial state of the Robot Server
         state_msg = robot_server_pb2.State(state=rs_state.tolist())
@@ -208,7 +216,7 @@ class Husky_ur3_Env(gym.Env):
 
         if self.real_robot:
             # Take current robot position as start position
-            start_pose = self.client.get_state_msg().state[3:6]
+            start_pose = self.client.get_state_msg().state[RS_ROBOT_POSE : RS_ROBOT_POSE + 3]
         else:
             # Create random starting position
             x = self.np_random.uniform(low=-2.0, high=2.0)
@@ -256,25 +264,25 @@ class Husky_ur3_Env(gym.Env):
 
         # Transform cartesian coordinates of target to polar coordinates
         polar_r, polar_theta = utils.cartesian_to_polar_2d(
-            x_target=rs_state[0],
-            y_target=rs_state[1],
-            x_origin=rs_state[3],
-            y_origin=rs_state[4],
+            x_target=rs_state[RS_TARGET],
+            y_target=rs_state[RS_TARGET + 1],
+            x_origin=rs_state[RS_ROBOT_POSE],
+            y_origin=rs_state[RS_ROBOT_POSE + 1],
         )
         # Rotate origin of polar coordinates frame to be matching with robot frame and normalize to +/- pi
-        polar_theta = utils.normalize_angle_rad(polar_theta - rs_state[5])
+        polar_theta = utils.normalize_angle_rad(polar_theta - rs_state[RS_ROBOT_POSE + 2])
 
         # Get Laser scanners data542
-        raw_laser_scan = rs_state[8:617]
+        raw_laser_scan = rs_state[RS_SCAN : RS_SCAN + 609]
 
         # Downsampling of laser values by picking every n-th value
         if self.laser_len > 0:
             laser = utils.downsample_list_to_len(raw_laser_scan, self.laser_len)
             # Compose environment state
-            state = np.concatenate((np.array([polar_r, polar_theta]), rs_state[6:8], laser))
+            state = np.concatenate((np.array([polar_r, polar_theta]), rs_state[RS_ROBOT_TWIST : RS_ROBOT_TWIST + 2], laser))
         else:
             # Compose environment state
-            state = np.concatenate((np.array([polar_r, polar_theta]), rs_state[6:8]))
+            state = np.concatenate((np.array([polar_r, polar_theta]), rs_state[RS_ROBOT_TWIST : RS_ROBOT_TWIST + 2]))
 
         return state.astype(np.float32)
 
@@ -343,7 +351,7 @@ class Husky_ur3_Env(gym.Env):
 
         """
 
-        if rs_state[617] == 1:
+        if rs_state[RS_COLLISION] == 1:
             return True
         else:
             return False
@@ -360,7 +368,7 @@ class Husky_ur3_Env(gym.Env):
         """
 
         threshold = 0.05
-        if min(rs_state[8:617]) < threshold:
+        if min(rs_state[RS_SCAN : RS_SCAN + 609]) < threshold:
             return True
         else:
             return False
@@ -451,20 +459,20 @@ class ObstacleAvoidanceHusky_ur3(Husky_ur3_Env):
         else:
             start_pose = self._get_start_pose()
 
-        rs_state[3:6] = start_pose
+        rs_state[RS_ROBOT_POSE : RS_ROBOT_POSE + 3] = start_pose
 
         # Set target position
         if target_pose:
             assert len(target_pose) == 3
         else:
             target_pose = self._get_target(start_pose)
-        rs_state[0:3] = target_pose
+        rs_state[RS_TARGET : RS_TARGET + 3] = target_pose
 
         # Generate obstacles positions
         self._generate_obstacles_positions()
-        rs_state[618:621] = self.sim_obstacles[0]
-        rs_state[621:624] = self.sim_obstacles[1]
-        rs_state[624:627] = self.sim_obstacles[2]
+        rs_state[RS_OBSTACLES : RS_OBSTACLES + 3] = self.sim_obstacles[0]
+        rs_state[RS_OBSTACLES + 3 : RS_OBSTACLES + 6] = self.sim_obstacles[1]
+        rs_state[RS_OBSTACLES + 6 : RS_OBSTACLES + 9] = self.sim_obstacles[2]
 
         # Set initial state of the Robot Server
         state_msg = robot_server_pb2.State(state=rs_state.tolist())
@@ -495,16 +503,21 @@ class ObstacleAvoidanceHusky_ur3(Husky_ur3_Env):
         angular_power = 0
 
         # Calculate distance to the target
-        target_coords = np.array([rs_state[0], rs_state[1]])
-        husky_coords = np.array([rs_state[3], rs_state[4]])
+        target_coords = np.array([rs_state[RS_TARGET], rs_state[RS_TARGET + 1]])
+        husky_coords = np.array([rs_state[RS_ROBOT_POSE], rs_state[RS_ROBOT_POSE + 1]])
         euclidean_dist_2d = np.linalg.norm(target_coords - husky_coords, axis=-1)
+        # print("Target coordinate: {:.3f}, {:.3f}".format(rs_state[RS_TARGET], rs_state[RS_TARGET + 1]))
+        # print("Distance: {:.3f}".format(euclidean_dist_2d))
+        # print("Robot heading: {:.3f}".format(rs_state[RS_ROBOT_POSE + 2]))
+        # print("Heading Error:: {:.3f}".format(self.state[1]))
 
         # Reward base
-        base_reward = -50 * euclidean_dist_2d
+        base_reward = -90 * euclidean_dist_2d
         if self.prev_base_reward is not None:
             reward = base_reward - self.prev_base_reward
         self.prev_base_reward = base_reward
 
+        reward -= self.state[1]
         # Power used by the motors
         linear_power = abs(action[0] * 0.30)
         angular_power = abs(action[1] * 0.05)
@@ -615,7 +628,7 @@ class ObstacleAvoidanceHusky_ur3(Husky_ur3_Env):
         safety_radius = 0.38
 
         robot_close_to_obstacle = False
-        robot_corners = self.Husky_ur3.get_corners_positions(rs_state[3], rs_state[4], rs_state[5])
+        robot_corners = self.Husky_ur3.get_corners_positions(rs_state[RS_ROBOT_POSE], rs_state[RS_ROBOT_POSE + 1], rs_state[RS_ROBOT_POSE + 2])
 
         for corner in robot_corners:
             for obstacle_coord in self.sim_obstacles:
