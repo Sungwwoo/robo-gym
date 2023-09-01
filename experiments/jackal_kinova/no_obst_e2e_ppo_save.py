@@ -15,7 +15,7 @@ target_machine_ip = "163.180.177.101"  # or other xxx.xxx.xxx.xxx
 
 date = datetime.now()
 
-run_name = "no_obst_e2e_rl_PPO_8"
+run_name = "no_obst_e2e_rl_PPO_10"
 models_dir = "models/" + run_name
 logdir = "logs"
 

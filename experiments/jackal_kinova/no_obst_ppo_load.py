@@ -11,8 +11,8 @@ target_machine_ip = "163.180.177.101"  # or other xxx.xxx.xxx.xxx
 env = gym.make("No_Obstacle_Avoidance_Jackal_Kinova_Sim-v0", ip=target_machine_ip, gui=True)
 env.reset()
 
-models_dir = "models/no_obst_e2e_rl_PPO_7"
-model_path = f"{models_dir}/208000"
+models_dir = "models/no_obst_e2e_rl_PPO_8"
+model_path = f"{models_dir}/532000"
 
 model = PPO.load(model_path, env=env)
 
@@ -37,5 +37,5 @@ for i in range(episodes):
 
 print("Success Rate: {}%".format(success / episodes * 100))
 print("Average Time: {:.3f} sec".format((sum_time / success)))
-print("Average Time: {:.3f} sec".format(best_time))
+print("Best Time: {:.3f} sec".format(best_time))
 env.close()
