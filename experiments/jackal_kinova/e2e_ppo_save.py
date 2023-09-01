@@ -15,7 +15,7 @@ target_machine_ip = "163.180.177.101"  # or other xxx.xxx.xxx.xxx
 
 date = datetime.now()
 
-run_name = "e2e_rl_PPO_6"
+run_name = "e2e_rl_PPO_14"
 models_dir = "models/" + run_name
 logdir = "logs"
 
@@ -33,14 +33,36 @@ env.reset()
 # add wrapper for automatic exception handlingz
 env = ExceptionHandling(env)
 
-policy_kwarg = dict(activation_fn=nn.ReLU, net_arch=[128, dict(pi=[128, 64], vf=[128, 64])])
+policy_kwarg = dict(activation_fn=nn.ReLU, net_arch=[256, dict(pi=[256, 128], vf=[256, 128])])
+
+
+def linear_schedule(initial_value: float):
+    """
+    Linear learning rate schedule.
+
+    :param initial_value: Initial learning rate.
+    :return: schedule that computes
+      current learning rate depending on remaining progress
+    """
+
+    def func(progress_remaining: float) -> float:
+        """
+        Progress will decrease from 1 (beginning) to 0.
+
+        :param progress_remaining:
+        :return: current learning rate
+        """
+        return progress_remaining * initial_value
+
+    return func
+
 
 # choose and run appropriate algorithm provided by stable-baselines
 model = PPO(
     "MlpPolicy",
     env,
+    learning_rate=6e-5,
     policy_kwargs=policy_kwarg,
-    n_steps=512,
     verbose=1,
     tensorboard_log="./logs",
 )
@@ -51,7 +73,7 @@ i = 1
 
 # model_path = f"{models_dir}/{TIMESTEPS*(i-1)}"
 # model = PPO.load(model_path, env=env)
-while i < 5000:
+while i < 2000:
     try:
         model.learn(
             total_timesteps=TIMESTEPS,

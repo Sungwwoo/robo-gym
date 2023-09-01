@@ -13,7 +13,7 @@ from robo_gym_server_modules.robot_server.grpc_msgs.python import robot_server_p
 
 
 NUM_OBSTACLES = 3
-DIST_BTW_OBSTACLES = 1.5
+DIST_BTW_OBSTACLES = 1.8
 # self.target = [0.0] * 3
 # self.base_pose = [0.0] * 3
 # self.base_twist = [0.0] * 2
@@ -56,7 +56,7 @@ class No_Obstacle_Avoidance_Jackal_Kinova(gym.Env):
 
     real_robot = False
     laser_len = 811
-    max_episode_steps = 128
+    max_episode_steps = 150
 
     def __init__(self, rs_address=None, **kwargs):
         self.jackal_kinova = jackal_kinova_utils.Jackal_Kinova()
@@ -174,13 +174,13 @@ class No_Obstacle_Avoidance_Jackal_Kinova(gym.Env):
 
         # self.state[0]: Euclidean distance to goal
         # self.state[1]: Heading error
-        base_reward = -70 * euclidean_dist_2d
+        base_reward = -80 * euclidean_dist_2d
 
         if self.prev_base_reward is not None:
             reward = base_reward - self.prev_base_reward
         self.prev_base_reward = base_reward
 
-        if abs(self.state[1]) > np.pi / 2:
+        if abs(self.state[1]) < np.pi / 3:
             reward += 1
         else:
             reward -= 1
@@ -221,7 +221,7 @@ class No_Obstacle_Avoidance_Jackal_Kinova(gym.Env):
         self.prev_ang_vel = rs_state[RS_ROBOT_TWIST + 1]
 
         # Long path length (episode length)
-        # reward -= 1.3
+        reward -= 0.7
 
         if not self.real_robot:
             # End episode if robot is collides with an object.
@@ -492,7 +492,7 @@ class No_Obstacle_Avoidance_Jackal_Kinova(gym.Env):
 
         """
 
-        threshold = 0.3
+        threshold = 0.1
         if min(rs_state[RS_SCAN : RS_SCAN + self.laser_len]) < threshold:
             return True
         else:
@@ -669,23 +669,31 @@ class Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova):
         # print("Robot heading: {:.3f}".format(rs_state[RS_ROBOT_POSE + 2]))
         # print("Heading Error:: {:.3f}".format(self.state[1]))
 
-        base_reward = -50 * ((2 / euclidean_dist_2d) ** 2)
+        base_reward = -30 * euclidean_dist_2d
 
         if self.prev_base_reward is not None:
             reward = base_reward - self.prev_base_reward
         self.prev_base_reward = base_reward
+
+        if abs(self.state[1]) < np.pi / 3:
+            reward += 1.3
+        else:
+            reward -= 1
 
         # Negative rewards
         # if rs_state[RS_ROBOT_TWIST] < 0.01 and self.zero_vel_penalty > -200:
         #     self.zero_vel_penalty = self.zero_vel_penalty - 5
         #     reward = reward - 5
 
-        reward += (3.14 - self.state[1]) / 3.14
+        # Spinning in plance
+        if action[0] < 0.01 and abs(action[1]) > 0.0:
+            reward -= 0.3
+
         # Power used by the motors
-        linear_power = abs(action[0] * 0.125)
-        angular_power = abs(action[1] * 0.05)
-        reward -= linear_power
-        reward -= angular_power
+        # linear_power = abs(action[0] * 0.15)
+        # angular_power = abs(action[1] * 0.3)
+        # reward -= linear_power
+        # reward -= angular_power
 
         if self.prev_rostime == 0.0:
             self.prev_rostime = rs_state[RS_ROSTIME]
@@ -711,53 +719,53 @@ class Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova):
         self.prev_ang_vel = rs_state[RS_ROBOT_TWIST + 1]
 
         # Long path length (episode length)
-        # reward -= 0.5
+        reward -= 0.7
 
         if not self.real_robot:
             # Negative reward if robot is too close to the obstacles
             if self._robot_close_to_sim_obstacle(rs_state):
-                reward = -200.0
+                reward = -30.0
                 done = True
                 info["final_status"] = "robot close to obstacle"
-                # print("robot close to obstacle")
-                # print("Episode Length: ", str(self.elapsed_steps))
+                print("robot close to obstacle")
+                print("Episode Length: ", str(self.elapsed_steps))
 
             # End episode if robot is collides with an object.
             if self._sim_robot_collision(rs_state):
-                reward = -200.0
+                reward = -30.0
                 done = True
                 info["final_status"] = "collision"
-                # print("collision occured")
-                # print("Episode Length: ", str(self.elapsed_steps))
+                print("collision occured")
+                print("Episode Length: ", str(self.elapsed_steps))
 
-            if self._min_laser_reading_below_threshold(rs_state):
-                reward = -200.0
-                done = True
-                info["final_status"] = "front collision"
-                # print("front blocked")
-                # print("Episode Length: ", str(self.elapsed_steps))
+            # if self._min_laser_reading_below_threshold(rs_state):
+            #     reward = -10.0
+            #     done = True
+            #     info["final_status"] = "front collision"
+            #     print("front blocked")
+            #     print("Episode Length: ", str(self.elapsed_steps))
 
             if self._robot_outside_of_boundary_box(rs_state[RS_ROBOT_POSE : RS_ROBOT_POSE + 3]):
-                reward = -200.0
+                reward = -30.0
                 done = True
                 info["final_status"] = "out of boundary"
-                # print("Robot out of boundary")
+                print("Robot out of boundary")
 
         # Target Reached
         if euclidean_dist_2d < self.distance_threshold:
-            reward = 200
+            reward = 20
             done = True
             info["final_status"] = "success"
             info["elapsed_time"] = rs_state[RS_ROSTIME] - self.episode_start_time
-            # print("Target Reached!")
-            # print("Episode Length: ", str(self.elapsed_steps))
+            print("Target Reached!")
+            print("Episode Length: ", str(self.elapsed_steps))
 
         # Time step exceeded
         if self.elapsed_steps >= self.max_episode_steps:
             done = True
             info["final_status"] = "max_steps_exceeded"
-            # print("max_step_exceeded")
-            # print("Distance from target: ", str(euclidean_dist_2d))
+            print("max_step_exceeded")
+            print("Distance from target: ", str(euclidean_dist_2d))
 
         return reward, done, info
 
@@ -853,33 +861,30 @@ class Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova):
         self.sim_obstacles = []
         i = 0
         while i < NUM_OBSTACLES:
-            pose = self.generate_pos()
+            pose = self._generate_obsetacle_pos()
             count = 0
-            while not self.is_valid_obstacle(pose, rs_state):
-                count += 1
-                pose = self.generate_pos()
+            while not self._is_valid_obstacle(pose, rs_state):
                 if count > 100:
                     i -= 1
                     self.sim_obstacles.pop()
+                pose = self._generate_obsetacle_pos()
+                count += 1
             self.sim_obstacles.append(pose)
             i += 1
 
-    def generate_pos(self):
+    def _generate_obsetacle_pos(self):
         x = self.np_random.uniform(low=3.0, high=8.0)
         y = self.np_random.uniform(low=-2.1, high=2.1)
         yaw = self.np_random.uniform(low=-np.pi, high=np.pi)
         return [x, y, yaw]
 
-    def is_valid_obstacle(self, obst_pose, rs_state):
-        if len(self.sim_obstacles) == 0:
-            return True
-        else:
-            for i in range(0, len(self.sim_obstacles)):
-                if np.sqrt((self.sim_obstacles[i][0] - obst_pose[0]) ** 2 + (self.sim_obstacles[i][1] - obst_pose[1]) ** 2) < DIST_BTW_OBSTACLES:
-                    return False
-                if np.sqrt((self.sim_obstacles[i][0] - rs_state[RS_TARGET]) ** 2 + (self.sim_obstacles[i][1] - rs_state[RS_TARGET + 1]) ** 2) < 0.5:
-                    return False
-            return True
+    def _is_valid_obstacle(self, obst_pose, rs_state):
+        if np.sqrt((obst_pose[0] - rs_state[RS_TARGET]) ** 2 + (obst_pose[1] - rs_state[RS_TARGET + 1]) ** 2) < 0.8:
+            return False
+        for i in range(0, len(self.sim_obstacles)):
+            if np.sqrt((self.sim_obstacles[i][0] - obst_pose[0]) ** 2 + (self.sim_obstacles[i][1] - obst_pose[1]) ** 2) < DIST_BTW_OBSTACLES:
+                return False
+        return True
 
 
 class Obstacle_Avoidance_Jackal_Kinova_Sim(Obstacle_Avoidance_Jackal_Kinova, Simulation):
