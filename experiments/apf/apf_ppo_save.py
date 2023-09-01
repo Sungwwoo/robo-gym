@@ -12,7 +12,6 @@ target_machine_ip = "192.168.0.32"  # or other xxx.xxx.xxx.xxx
 run_name = "basic_apf_PPO_1"
 models_dir = "models/" + run_name
 
-date = datetime.now()
 logdir = "logs"
 
 if not os.path.exists(models_dir):
