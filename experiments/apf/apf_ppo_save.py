@@ -2,13 +2,15 @@ import gym
 import robo_gym
 from robo_gym.wrappers.exception_handling import ExceptionHandling
 from stable_baselines3 import PPO
+import torch.nn as nn
 import os
 from datetime import datetime
 
 # specify the ip of the machine running the robot-server
-target_machine_ip = "163.180.177.101"  # or other xxx.xxx.xxx.xxx
+target_machine_ip = "192.168.0.32"  # or other xxx.xxx.xxx.xxx
 
-models_dir = "models/basic_apf_PPO"
+run_name = "basic_apf_PPO_1"
+models_dir = "models/" + run_name
 
 date = datetime.now()
 logdir = "logs"
@@ -26,20 +28,29 @@ env.reset()
 # add wrapper for automatic exception handlingz
 env = ExceptionHandling(env)
 
-# load learned model
-# models_dir = "models/husky_nav3_PPO"
-# model_path = f"{models_dir}/60000.zip"
-# model = PPO.load(model_path, env=env)
-
+policy_kwarg = dict(
+    activation_fn=nn.ReLU, net_arch=[256, dict(pi=[256, 128], vf=[256, 128])]
+)
 # choose and run appropriate algorithm provided by stable-baselines
-model = PPO("MlpPolicy", env, learning_rate=4e-4, n_steps=512, verbose=1, tensorboard_log="./logs/" + date.strftime("%Y%m%d-%H%M%S"))
+model = PPO(
+    "MlpPolicy",
+    env,
+    policy_kwargs=policy_kwarg,
+    learning_rate=4e-4,
+    verbose=1,
+    tensorboard_log="./logs/",
+)
 
-TIMESTEPS = 2048
+TIMESTEPS = 1000
 err_count = 0
 i = 1
 while i < 4000:
     try:
-        model.learn(total_timesteps=TIMESTEPS, reset_num_timesteps=False, tb_log_name="basic_apf_ppo_" + date.strftime("%Y%m%d-%H%M%S"))
+        model.learn(
+            total_timesteps=TIMESTEPS,
+            reset_num_timesteps=False,
+            tb_log_name=run_name,
+        )
         model.save(f"{models_dir}/{TIMESTEPS*i}")
         print("Error count: ", err_count)
         i = i + 1
@@ -58,12 +69,9 @@ while i < 4000:
         env = ExceptionHandling(env)
 
         del model
-        if i == 1:
-            model = PPO("MlpPolicy", env, verbose=1, tensorboard_log="./logs")
-        else:
-            print("Loading model ", TIMESTEPS * (i - 1))
-            model_path = f"{models_dir}/{TIMESTEPS*(i-1)}"
-            model = PPO.load(model_path, env=env)
+        print("Loading model ", TIMESTEPS * (i - 1))
+        model_path = f"{models_dir}/{TIMESTEPS*(i-1)}"
+        model = PPO.load(model_path, env=env)
 
         continue
 
