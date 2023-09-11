@@ -57,6 +57,15 @@ register(
 )
 
 
+register(
+    id="Fixed_Obstacle_Avoidance_Jackal_Kinova_Sim-v0",
+    entry_point="robo_gym.envs:Fixed_Obstacle_Avoidance_Jackal_Kinova_Sim",
+)
+
+register(
+    id="Fixed_Obstacle_Avoidance_Jackal_Kinova_Rob-v0",
+    entry_point="robo_gym.envs:Fixed_Obstacle_Avoidance_Jackal_Kinova_Rob",
+)
 # Artificial Potential Field RL
 register(
     id="Basic_APF_Jackal_Kinova_Sim-v0",

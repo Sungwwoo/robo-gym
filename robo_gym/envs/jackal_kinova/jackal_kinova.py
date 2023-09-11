@@ -35,6 +35,38 @@ RS_COLLISION = RS_SCAN + 811  # Raser Scan Length
 RS_ROSTIME = RS_COLLISION + 1
 RS_OBSTACLES = RS_ROSTIME + 1
 
+start_points = [
+    [14.0, 15.0, -np.pi],
+    [8.0, 7.0, np.pi / 2],
+    [8.0, 3.0, 0],
+    [8.0, -3.0, 0],
+    [6.0, 1.75, -np.pi],
+    [3.0, 16.7, -np.pi / 2],
+    [-6.0, 1.5, 0],
+    [8.0, -9.0, 0],
+    [8.0, -15.0, 0],
+    [6.0, -1.75, -np.pi],
+    [3.0, -4.5, -np.pi / 2],
+    [-6.0, -1.5, -np.pi],
+]
+
+target_points = [
+    [8.0, 15.0, 0],
+    [14.0, 7.0, 0],
+    [14.0, 5.0, 0],
+    [11.0, -3.0, 0],
+    [-2.75, 17.0, 0],
+    [3.0, 4.5, 0],
+    [-14.0, 17.0, 0],
+    [14.0, -9.0, 0],
+    [14.0, -16.0, 0],
+    [-2.75, -17.0, -np.pi],
+    [3.0, -16.7, 0],
+    [-14.0, -17.0, -np.pi],
+]
+
+e_lengths = [150, 150, 150, 150, 400, 300, 500, 150, 150, 400, 300, 500]
+
 
 class No_Obstacle_Avoidance_Jackal_Kinova(gym.Env):
     """Mobile Industrial Robots jackal_kinova base environment.
@@ -69,7 +101,9 @@ class No_Obstacle_Avoidance_Jackal_Kinova(gym.Env):
 
         self.elapsed_steps = 0
         self.observation_space = self._get_observation_space()
-        self.action_space = spaces.Box(low=np.array(action_low), high=np.array(action_high), dtype=np.float32)
+        self.action_space = spaces.Box(
+            low=np.array(action_low), high=np.array(action_high), dtype=np.float32
+        )
         self.seed()
         self.distance_threshold = 0.6
         self.min_target_dist = 1.0
@@ -143,7 +177,9 @@ class No_Obstacle_Avoidance_Jackal_Kinova(gym.Env):
             raise RobotServerError("set_state")
 
         # Get Robot Server state
-        rs_state = copy.deepcopy(np.nan_to_num(np.array(self.client.get_state_msg().state)))
+        rs_state = copy.deepcopy(
+            np.nan_to_num(np.array(self.client.get_state_msg().state))
+        )
 
         # Check if the length of the Robot Server state received is correct
         if not len(rs_state) == self._get_robot_server_state_len():
@@ -235,7 +271,9 @@ class No_Obstacle_Avoidance_Jackal_Kinova(gym.Env):
             # if self._min_laser_reading_below_threshold(rs_state):
             #     reward -= 0.3
 
-            if self._robot_outside_of_boundary_box(rs_state[RS_ROBOT_POSE : RS_ROBOT_POSE + 3]):
+            if self._robot_outside_of_boundary_box(
+                rs_state[RS_ROBOT_POSE : RS_ROBOT_POSE + 3]
+            ):
                 reward = -10.0
                 done = True
                 info["final_status"] = "out of boundary"
@@ -405,7 +443,9 @@ class No_Obstacle_Avoidance_Jackal_Kinova(gym.Env):
             y_origin=rs_state[RS_ROBOT_POSE + 1],
         )
         # Rotate origin of polar coordinates frame to be matching with robot frame and normalize to +/- pi
-        polar_theta = utils.normalize_angle_rad(polar_theta - rs_state[RS_ROBOT_POSE + 2])
+        polar_theta = utils.normalize_angle_rad(
+            polar_theta - rs_state[RS_ROBOT_POSE + 2]
+        )
         # Get Laser scanners data
         raw_laser_scan = rs_state[RS_SCAN : RS_SCAN + self.laser_len]
 
@@ -516,18 +556,30 @@ class No_Obstacle_Avoidance_Jackal_Kinova(gym.Env):
         width = 9
         height = 6
 
-        if robot_coordinates[0] < -2 or robot_coordinates[0] > width or np.absolute(robot_coordinates[1]) > (height / 2):
+        if (
+            robot_coordinates[0] < -2
+            or robot_coordinates[0] > width
+            or np.absolute(robot_coordinates[1]) > (height / 2)
+        ):
             return True
         else:
             return False
 
 
-class No_Obstacle_Avoidance_Jackal_Kinova_Sim(No_Obstacle_Avoidance_Jackal_Kinova, Simulation):
+class No_Obstacle_Avoidance_Jackal_Kinova_Sim(
+    No_Obstacle_Avoidance_Jackal_Kinova, Simulation
+):
     cmd = "roslaunch jackal_kinova_robot_server sim_robot_server_no_obstacle.launch world_name:=lab_6by9_no_obst.world"
 
-    def __init__(self, ip=None, lower_bound_port=None, upper_bound_port=None, gui=True, **kwargs):
-        Simulation.__init__(self, self.cmd, ip, lower_bound_port, upper_bound_port, gui, **kwargs)
-        Obstacle_Avoidance_Jackal_Kinova.__init__(self, rs_address=self.robot_server_ip, **kwargs)
+    def __init__(
+        self, ip=None, lower_bound_port=None, upper_bound_port=None, gui=True, **kwargs
+    ):
+        Simulation.__init__(
+            self, self.cmd, ip, lower_bound_port, upper_bound_port, gui, **kwargs
+        )
+        Obstacle_Avoidance_Jackal_Kinova.__init__(
+            self, rs_address=self.robot_server_ip, **kwargs
+        )
 
 
 class No_Obstacle_Avoidance_Jackal_Kinova_Rob(No_Obstacle_Avoidance_Jackal_Kinova):
@@ -630,7 +682,9 @@ class Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova):
         # Generate obstacles positions
         self._generate_obstacles_positions(rs_state)
         for i in range(0, NUM_OBSTACLES):
-            rs_state[RS_OBSTACLES + 3 * i : RS_OBSTACLES + 3 * (i + 1)] = self.sim_obstacles[i]
+            rs_state[
+                RS_OBSTACLES + 3 * i : RS_OBSTACLES + 3 * (i + 1)
+            ] = self.sim_obstacles[i]
 
         # Set initial state of the Robot Server
         state_msg = robot_server_pb2.State(state=rs_state.tolist())
@@ -638,7 +692,9 @@ class Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova):
             raise RobotServerError("set_state")
 
         # Get Robot Server state
-        rs_state = copy.deepcopy(np.nan_to_num(np.array(self.client.get_state_msg().state)))
+        rs_state = copy.deepcopy(
+            np.nan_to_num(np.array(self.client.get_state_msg().state))
+        )
 
         # Check if the length of the Robot Server state received is correct
         if not len(rs_state) == self._get_robot_server_state_len():
@@ -745,7 +801,9 @@ class Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova):
             #     print("front blocked")
             #     print("Episode Length: ", str(self.elapsed_steps))
 
-            if self._robot_outside_of_boundary_box(rs_state[RS_ROBOT_POSE : RS_ROBOT_POSE + 3]):
+            if self._robot_outside_of_boundary_box(
+                rs_state[RS_ROBOT_POSE : RS_ROBOT_POSE + 3]
+            ):
                 reward = -30.0
                 done = True
                 info["final_status"] = "out of boundary"
@@ -791,7 +849,9 @@ class Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova):
         rostime = [0.0]
         obstacles = [0.0 for i in range(0, 3 * NUM_OBSTACLES)]
 
-        rs_state = target + base_pose + base_twist + scan + [collision] + rostime + obstacles
+        rs_state = (
+            target + base_pose + base_twist + scan + [collision] + rostime + obstacles
+        )
 
         return len(rs_state)
 
@@ -879,21 +939,337 @@ class Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova):
         return [x, y, yaw]
 
     def _is_valid_obstacle(self, obst_pose, rs_state):
-        if np.sqrt((obst_pose[0] - rs_state[RS_TARGET]) ** 2 + (obst_pose[1] - rs_state[RS_TARGET + 1]) ** 2) < 0.8:
+        if (
+            np.sqrt(
+                (obst_pose[0] - rs_state[RS_TARGET]) ** 2
+                + (obst_pose[1] - rs_state[RS_TARGET + 1]) ** 2
+            )
+            < 0.8
+        ):
             return False
         for i in range(0, len(self.sim_obstacles)):
-            if np.sqrt((self.sim_obstacles[i][0] - obst_pose[0]) ** 2 + (self.sim_obstacles[i][1] - obst_pose[1]) ** 2) < DIST_BTW_OBSTACLES:
+            if (
+                np.sqrt(
+                    (self.sim_obstacles[i][0] - obst_pose[0]) ** 2
+                    + (self.sim_obstacles[i][1] - obst_pose[1]) ** 2
+                )
+                < DIST_BTW_OBSTACLES
+            ):
                 return False
         return True
 
 
-class Obstacle_Avoidance_Jackal_Kinova_Sim(Obstacle_Avoidance_Jackal_Kinova, Simulation):
+class Obstacle_Avoidance_Jackal_Kinova_Sim(
+    Obstacle_Avoidance_Jackal_Kinova, Simulation
+):
     cmd = "roslaunch jackal_kinova_robot_server sim_robot_server.launch world_name:=lab_6by9_obst_3.world"
 
-    def __init__(self, ip=None, lower_bound_port=None, upper_bound_port=None, gui=True, **kwargs):
-        Simulation.__init__(self, self.cmd, ip, lower_bound_port, upper_bound_port, gui, **kwargs)
-        Obstacle_Avoidance_Jackal_Kinova.__init__(self, rs_address=self.robot_server_ip, **kwargs)
+    def __init__(
+        self, ip=None, lower_bound_port=None, upper_bound_port=None, gui=True, **kwargs
+    ):
+        Simulation.__init__(
+            self, self.cmd, ip, lower_bound_port, upper_bound_port, gui, **kwargs
+        )
+        Obstacle_Avoidance_Jackal_Kinova.__init__(
+            self, rs_address=self.robot_server_ip, **kwargs
+        )
 
 
 class Obstacle_Avoidance_Jackal_Kinova_Rob(Obstacle_Avoidance_Jackal_Kinova):
+    real_robot = True
+
+
+class Fixed_Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova):
+    def step(self, action):
+        action = action.astype(np.float32)
+
+        self.elapsed_steps += 1
+
+        # Check if the action is within the action space
+        assert self.action_space.contains(action), "%r (%s) invalid" % (
+            action,
+            type(action),
+        )
+
+        # Convert environment action to Robot Server action
+        rs_action = copy.deepcopy(action)
+
+        # Scale action (use when the normalized action space is used)
+        # rs_action = np.multiply(action, self.max_vel)
+
+        # Send action to Robot Server
+        if not self.client.send_action(rs_action.tolist()):
+            raise RobotServerError("send_action")
+
+        # Get state from Robot Server
+        rs_state = self.client.get_state_msg().state
+        # Convert the state from Robot Server format to environment format
+        self.state = self._robot_server_state_to_env_state(rs_state)
+
+        # Check if the environment state is contained in the observation space
+        if not self.observation_space.contains(self.state):
+            raise InvalidStateError()
+
+        # Assign reward
+        reward, done, info = self._reward(rs_state=rs_state, action=action)
+
+        return self.state, reward, done, info
+
+    def reset(self, start_pose=None, target_pose=None):
+        """Environment reset.
+
+        Args:
+            start_pose (list[3] or np.array[3]): [x,y,yaw] initial robot position.
+            target_pose (list[3] or np.array[3]): [x,y,yaw] target robot position.
+
+        Returns:
+            np.array: Environment state.
+
+        """
+        self.elapsed_steps = 0
+
+        self.prev_base_reward = None
+        self.acc_penalty = 0.0
+        self.zero_vel_penalty = 0.0
+
+        self.prev_lin_vel, self.prev_ang_vel = 0.0, 0.0
+        self.episode_start_time = 0.0
+        self.prev_rostime = 0.0
+
+        # Initialize environment state
+        self.state = np.zeros(self._get_env_state_len())
+        rs_state = np.zeros(self._get_robot_server_state_len())
+
+        env_num = np.random.randint(0, len(start_points))
+        # Set Robot starting position
+        if start_pose:
+            assert len(start_pose) == 3
+        else:
+            start_pose = self._get_start_pose(env_num)
+
+        rs_state[RS_ROBOT_POSE : RS_ROBOT_POSE + 3] = start_pose
+
+        # Set target position
+        if target_pose:
+            assert len(target_pose) == 3
+        else:
+            target_pose = self._get_target(env_num)
+        rs_state[RS_TARGET : RS_TARGET + 3] = target_pose
+
+        self.max_episode_steps = e_lengths[env_num]
+
+        # Set initial state of the Robot Server
+        state_msg = robot_server_pb2.State(state=rs_state.tolist())
+        if not self.client.set_state_msg(state_msg):
+            raise RobotServerError("set_state")
+
+        # Get Robot Server state
+        rs_state = copy.deepcopy(
+            np.nan_to_num(np.array(self.client.get_state_msg().state))
+        )
+
+        # Check if the length of the Robot Server state received is correct
+        if not len(rs_state) == self._get_robot_server_state_len():
+            raise InvalidStateError("Robot Server state received has wrong length")
+
+        # Convert the initial state from Robot Server format to environment format
+        self.state = self._robot_server_state_to_env_state(rs_state)
+
+        # Check if the environment state is contained in the observation space
+        if not self.observation_space.contains(self.state):
+            raise InvalidStateError()
+
+        return self.state
+
+    def _reward(self, rs_state, action):
+        reward = 0
+        done = False
+        info = {}
+
+        # Reward base: Distance to target
+
+        # Calculate distance to the target
+        target_coords = np.array([rs_state[RS_TARGET], rs_state[RS_TARGET + 1]])
+        robot_coords = np.array([rs_state[RS_ROBOT_POSE], rs_state[RS_ROBOT_POSE + 1]])
+        euclidean_dist_2d = np.linalg.norm(target_coords - robot_coords, axis=-1)
+        # print("Target coordinate: {:.3f}, {:.3f}".format(rs_state[RS_TARGET], rs_state[RS_TARGET + 1]))
+        # print("Distance: {:.3f}".format(euclidean_dist_2d))
+        # print("Robot heading: {:.3f}".format(rs_state[RS_ROBOT_POSE + 2]))
+        # print("Heading Error:: {:.3f}".format(self.state[1]))
+
+        base_reward = -30 * euclidean_dist_2d
+
+        if self.prev_base_reward is not None:
+            reward = base_reward - self.prev_base_reward
+        self.prev_base_reward = base_reward
+
+        if abs(self.state[1]) < np.pi / 3:
+            reward += 1.3
+        else:
+            reward -= 1
+
+        # Negative rewards
+        # if rs_state[RS_ROBOT_TWIST] < 0.01 and self.zero_vel_penalty > -200:
+        #     self.zero_vel_penalty = self.zero_vel_penalty - 5
+        #     reward = reward - 5
+
+        # Spinning in plance
+        if action[0] < 0.01 and abs(action[1]) > 0.0:
+            reward -= 0.3
+
+        # Power used by the motors
+        # linear_power = abs(action[0] * 0.15)
+        # angular_power = abs(action[1] * 0.3)
+        # reward -= linear_power
+        # reward -= angular_power
+
+        if self.prev_rostime == 0.0:
+            self.prev_rostime = rs_state[RS_ROSTIME]
+            self.episode_start_time = rs_state[RS_ROSTIME]
+        else:
+            if self.acc_penalty > -200:
+                # High acceleration
+                # 1: Continous Penalty
+                # r = 10 * (abs(rs_state[RS_ROBOT_TWIST] - self.prev_lin_vel) + abs(rs_state[RS_ROBOT_TWIST] - self.prev_ang_vel))
+
+                # 2: Discrete Penalty
+                timediff = rs_state[RS_ROSTIME] - self.prev_rostime
+                # r = 5
+                # if abs(rs_state[RS_ROBOT_TWIST] - self.prev_lin_vel) / timediff > self.apf_util.get_max_lin_acc():
+                #     self.acc_penalty = self.acc_penalty - r
+                # if abs(rs_state[RS_ROBOT_TWIST + 1] - self.prev_ang_vel) / timediff > self.apf_util.get_max_ang_acc():
+                #     self.acc_penalty = self.acc_penalty - r
+
+                # reward = reward - r
+            self.prev_rostime = rs_state[RS_ROSTIME]
+
+        self.prev_lin_vel = rs_state[RS_ROBOT_TWIST]
+        self.prev_ang_vel = rs_state[RS_ROBOT_TWIST + 1]
+
+        # Long path length (episode length)
+        reward -= 0.7
+
+        if not self.real_robot:
+            # End episode if robot is collides with an object.
+            if self._sim_robot_collision(rs_state):
+                reward = -30.0
+                done = True
+                info["final_status"] = "collision"
+                print("collision occured")
+                print("Episode Length: ", str(self.elapsed_steps))
+
+            if self._min_laser_reading_below_threshold(rs_state):
+                reward = -10.0
+                done = True
+                info["final_status"] = "front collision"
+                print("front blocked")
+                print("Episode Length: ", str(self.elapsed_steps))
+
+        # Target Reached
+        if euclidean_dist_2d < self.distance_threshold:
+            reward = 20
+            done = True
+            info["final_status"] = "success"
+            info["elapsed_time"] = rs_state[RS_ROSTIME] - self.episode_start_time
+            print("Target Reached!")
+            print("Episode Length: ", str(self.elapsed_steps))
+
+        # Time step exceeded
+        if self.elapsed_steps >= self.max_episode_steps:
+            done = True
+            info["final_status"] = "max_steps_exceeded"
+            print("max_step_exceeded")
+            print("Distance from target: ", str(euclidean_dist_2d))
+
+        return reward, done, info
+
+    def render(self):
+        pass
+
+    def _get_robot_server_state_len(self):
+        """Get length of the Robot Server state.
+
+        Describes the composition of the Robot Server state and returns
+        its length.
+
+        Returns:
+            int: Length of the Robot Server state.
+
+        """
+
+        target = [0.0] * 3
+        base_pose = [0.0] * 3
+        base_twist = [0.0] * 2
+        scan = [0.0] * self.laser_len
+        collision = False
+        rostime = [0.0]
+
+        rs_state = target + base_pose + base_twist + scan + [collision] + rostime
+
+        return len(rs_state)
+
+    def _sim_robot_collision(self, rs_state):
+        """Get status of simulated collision sensor.
+
+        Used only for simulated Robot Server.
+
+        Args:
+            rs_state (list): State in Robot Server format.
+
+        Returns:
+            bool: True if the robot is in collision.
+
+        """
+
+        if rs_state[RS_COLLISION] == 1:
+            return True
+        else:
+            return False
+
+    def _get_start_pose(self, env_num):
+        """Get initial robot coordinates.
+
+        For the real robot the initial coordinates are its current coordinates
+        whereas for the simulated robot the initial coordinates are
+        randomly generated.
+
+        Returns:
+            numpy.array: [x,y,yaw] robot initial coordinates.
+        """
+
+        return start_points[env_num]
+
+    def _get_target(self, env_num):
+        """Generate coordinates of the target at a minimum distance from the robot.
+
+        Args:
+            robot_coordinates (list): [x,y,yaw] coordinates of the robot.
+
+        Returns:
+            numpy.array: [x,y,yaw] coordinates of the target.
+
+        """
+
+        return target_points[env_num]
+
+
+class Fixed_Obstacle_Avoidance_Jackal_Kinova_Sim(
+    Fixed_Obstacle_Avoidance_Jackal_Kinova, Simulation
+):
+    cmd = "roslaunch jackal_kinova_robot_server sim_robot_server.launch world_name:=learning_world_4.world"
+
+    def __init__(
+        self, ip=None, lower_bound_port=None, upper_bound_port=None, gui=True, **kwargs
+    ):
+        Simulation.__init__(
+            self, self.cmd, ip, lower_bound_port, upper_bound_port, gui, **kwargs
+        )
+        Fixed_Obstacle_Avoidance_Jackal_Kinova.__init__(
+            self, rs_address=self.robot_server_ip, **kwargs
+        )
+
+
+class Fixed_Obstacle_Avoidance_Jackal_Kinova_Rob(
+    Fixed_Obstacle_Avoidance_Jackal_Kinova
+):
     real_robot = True

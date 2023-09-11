@@ -11,11 +11,11 @@ import os
 from datetime import datetime
 
 # specify the ip of the machine running the robot-server
-target_machine_ip = "163.180.177.101"  # or other xxx.xxx.xxx.xxx
+target_machine_ip = "192.168.0.32"  # or other xxx.xxx.xxx.xxx
 
 date = datetime.now()
 
-run_name = "e2e_rl_PPO_14"
+run_name = "e2e_rl_PPO_1"
 models_dir = "models/" + run_name
 logdir = "logs"
 
@@ -26,14 +26,16 @@ if not os.path.exists(logdir):
     os.makedirs(logdir)
 
 # initialize environment
-env = gym.make("Obstacle_Avoidance_Jackal_Kinova_Sim-v0", ip=target_machine_ip)
+env = gym.make("Fixed_Obstacle_Avoidance_Jackal_Kinova_Sim-v0", ip=target_machine_ip)
 # env NoObstacleNavigationMir100Sim / ObstacleAvoidanceMir100Sim
 
 env.reset()
 # add wrapper for automatic exception handlingz
 env = ExceptionHandling(env)
 
-policy_kwarg = dict(activation_fn=nn.ReLU, net_arch=[256, dict(pi=[256, 128], vf=[256, 128])])
+policy_kwarg = dict(
+    activation_fn=nn.ReLU, net_arch=[256, dict(pi=[256, 128], vf=[256, 128])]
+)
 
 
 def linear_schedule(initial_value: float):

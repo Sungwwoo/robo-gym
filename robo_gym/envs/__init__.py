@@ -19,6 +19,8 @@ from robo_gym.envs.jackal_kinova.jackal_kinova import (
     No_Obstacle_Avoidance_Jackal_Kinova_Rob,
     Obstacle_Avoidance_Jackal_Kinova_Sim,
     Obstacle_Avoidance_Jackal_Kinova_Rob,
+    Fixed_Obstacle_Avoidance_Jackal_Kinova_Sim,
+    Fixed_Obstacle_Avoidance_Jackal_Kinova_Rob,
 )
 
 # Artificial Potential Field RL
