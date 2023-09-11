@@ -32,7 +32,6 @@ RS_ROBOT_TWIST = RS_ROBOT_POSE + 3
 RS_FORCES = RS_ROBOT_TWIST + 2
 RS_COLLISION = RS_FORCES + 9
 RS_ROSTIME = RS_COLLISION + 1
-RS_ATT_OFFSET = RS_ROSTIME + 1
 RS_PDGAINS = RS_ROSTIME + 1
 
 start_points = [
@@ -65,6 +64,8 @@ target_points = [
     [-14.0, -17.0, -np.pi],
 ]
 
+e_lengths = [150, 150, 150, 150, 400, 300, 500, 150, 150, 400, 300, 500]
+
 
 class Basic_APF_Jackal_Kinova(gym.Env):
     """Mobile Industrial Robots jackal_kinova base environment.
@@ -94,8 +95,8 @@ class Basic_APF_Jackal_Kinova(gym.Env):
 
         # Using normalized action space
         # KP, ETA
-        self.action_low = [0.01, 0.05]
-        self.action_high = [1, 1]
+        self.action_low = [0.01, 0.05, -1.0]
+        self.action_high = [1.0, 1.0, 1.0]
 
         self.elapsed_steps = 0
         self.observation_space = self._get_observation_space()
@@ -158,7 +159,7 @@ class Basic_APF_Jackal_Kinova(gym.Env):
         self.state = np.zeros(self._get_env_state_len())
         rs_state = np.zeros(self._get_robot_server_state_len())
 
-        env_num = np.random.randint(0, len(start_points))
+        env_num = int(np.random.randint(0, len(start_points)))
         # Set Robot starting position
         if start_pose:
             assert len(start_pose) == 3
@@ -174,13 +175,17 @@ class Basic_APF_Jackal_Kinova(gym.Env):
             target_pose = self._get_target(env_num)
         rs_state[RS_TARGET : RS_TARGET + 3] = target_pose
 
+        self.max_episode_steps = e_lengths[env_num]
+
         # Set initial state of the Robot Server
         state_msg = robot_server_pb2.State(state=rs_state.tolist())
         if not self.client.set_state_msg(state_msg):
             raise RobotServerError("set_state")
 
         # Get Robot Server state
-        rs_state = copy.deepcopy(np.nan_to_num(np.array(self.client.get_state_msg().state)))
+        rs_state = copy.deepcopy(
+            np.nan_to_num(np.array(self.client.get_state_msg().state))
+        )
 
         # Check if the length of the Robot Server state received is correct
         if not len(rs_state) == self._get_robot_server_state_len():
@@ -330,9 +335,10 @@ class Basic_APF_Jackal_Kinova(gym.Env):
         pass
 
     def _denormalize_actions(self, action):
-        rs_action = np.zeros(2, dtype=np.float32)
+        rs_action = np.zeros(3, dtype=np.float32)
         rs_action[0] = 200 * action[0]
         rs_action[1] = 500 * action[1]
+        rs_action[2] = action[2]
         return rs_action
 
     def _get_robot_server_state_len(self):
@@ -355,7 +361,16 @@ class Basic_APF_Jackal_Kinova(gym.Env):
         collision = [False]
         rostime = [0.0]
 
-        rs_state = target + apf_weights + scan + robot_pose + robot_twist + forces + collision + rostime
+        rs_state = (
+            target
+            + apf_weights
+            + scan
+            + robot_pose
+            + robot_twist
+            + forces
+            + collision
+            + rostime
+        )
 
         return len(rs_state)
 
@@ -428,7 +443,9 @@ class Basic_APF_Jackal_Kinova(gym.Env):
             y_origin=rs_state[RS_ROBOT_POSE + 1],
         )
         # Rotate origin of polar coordinates frame to be matching with robot frame and normalize to +/- pi
-        polar_theta = utils.normalize_angle_rad(polar_theta - rs_state[RS_ROBOT_POSE + 2])
+        polar_theta = utils.normalize_angle_rad(
+            polar_theta - rs_state[RS_ROBOT_POSE + 2]
+        )
 
         state = np.concatenate(
             (
@@ -480,8 +497,12 @@ class Basic_APF_Jackal_Kinova(gym.Env):
         min_vel = np.array([min_lin_vel, min_ang_vel])
 
         # Definition of environment observation_space
-        obs_space_max = np.concatenate((max_target_coords, max_laser, max_weights, max_forces, max_vel))
-        obs_space_min = np.concatenate((min_target_coords, min_laser, min_weights, min_forces, min_vel))
+        obs_space_max = np.concatenate(
+            (max_target_coords, max_laser, max_weights, max_forces, max_vel)
+        )
+        obs_space_min = np.concatenate(
+            (min_target_coords, min_laser, min_weights, min_forces, min_vel)
+        )
 
         return spaces.Box(low=obs_space_min, high=obs_space_max, dtype=np.float32)
 
@@ -503,7 +524,11 @@ class Basic_APF_Jackal_Kinova(gym.Env):
         x = 9
         y = 6
 
-        if robot_coordinates[0] < -1 or robot_coordinates[0] > x or np.absolute(robot_coordinates[1]) > (y / 2):
+        if (
+            robot_coordinates[0] < -1
+            or robot_coordinates[0] > x
+            or np.absolute(robot_coordinates[1]) > (y / 2)
+        ):
             return True
         else:
             return False
@@ -612,10 +637,22 @@ class Basic_APF_Jackal_Kinova(gym.Env):
         return [x, y, yaw]
 
     def _is_valid_obstacle(self, obst_pose, rs_state):
-        if np.sqrt((obst_pose[0] - rs_state[RS_TARGET]) ** 2 + (obst_pose[1] - rs_state[RS_TARGET + 1]) ** 2) < 0.8:
+        if (
+            np.sqrt(
+                (obst_pose[0] - rs_state[RS_TARGET]) ** 2
+                + (obst_pose[1] - rs_state[RS_TARGET + 1]) ** 2
+            )
+            < 0.8
+        ):
             return False
         for i in range(0, len(self.sim_obstacles)):
-            if np.sqrt((self.sim_obstacles[i][0] - obst_pose[0]) ** 2 + (self.sim_obstacles[i][1] - obst_pose[1]) ** 2) < DIST_BTW_OBSTACLES:
+            if (
+                np.sqrt(
+                    (self.sim_obstacles[i][0] - obst_pose[0]) ** 2
+                    + (self.sim_obstacles[i][1] - obst_pose[1]) ** 2
+                )
+                < DIST_BTW_OBSTACLES
+            ):
                 return False
         return True
 
@@ -623,9 +660,15 @@ class Basic_APF_Jackal_Kinova(gym.Env):
 class Basic_APF_Jackal_Kinova_Sim(Basic_APF_Jackal_Kinova, Simulation):
     cmd = "roslaunch apf_robot_server sim_robot_server.launch world_name:=learning_world_4.world"
 
-    def __init__(self, ip=None, lower_bound_port=None, upper_bound_port=None, gui=True, **kwargs):
-        Simulation.__init__(self, self.cmd, ip, lower_bound_port, upper_bound_port, gui, **kwargs)
-        Basic_APF_Jackal_Kinova.__init__(self, rs_address=self.robot_server_ip, **kwargs)
+    def __init__(
+        self, ip=None, lower_bound_port=None, upper_bound_port=None, gui=True, **kwargs
+    ):
+        Simulation.__init__(
+            self, self.cmd, ip, lower_bound_port, upper_bound_port, gui, **kwargs
+        )
+        Basic_APF_Jackal_Kinova.__init__(
+            self, rs_address=self.robot_server_ip, **kwargs
+        )
 
 
 class Basic_APF_Jackal_Kinova_Rob(Basic_APF_Jackal_Kinova):
@@ -669,7 +712,17 @@ class Basic_APF_with_PD_Jackal_Kinova(Basic_APF_Jackal_Kinova):
         rostime = [0.0]
         pd_gains = [0.0] * 3
 
-        rs_state = target + apf_weights + scan + robot_pose + robot_twist + forces + [collision] + rostime + pd_gains
+        rs_state = (
+            target
+            + apf_weights
+            + scan
+            + robot_pose
+            + robot_twist
+            + forces
+            + [collision]
+            + rostime
+            + pd_gains
+        )
 
         return len(rs_state)
 
@@ -677,9 +730,15 @@ class Basic_APF_with_PD_Jackal_Kinova(Basic_APF_Jackal_Kinova):
 class Basic_APF_with_PD_Jackal_Kinova_Sim(Basic_APF_with_PD_Jackal_Kinova, Simulation):
     cmd = "roslaunch apf_robot_server sim_robot_server_with_pd.launch world_name:=learning_world_4.world"
 
-    def __init__(self, ip=None, lower_bound_port=None, upper_bound_port=None, gui=True, **kwargs):
-        Simulation.__init__(self, self.cmd, ip, lower_bound_port, upper_bound_port, gui, **kwargs)
-        Basic_APF_Jackal_Kinova.__init__(self, rs_address=self.robot_server_ip, **kwargs)
+    def __init__(
+        self, ip=None, lower_bound_port=None, upper_bound_port=None, gui=True, **kwargs
+    ):
+        Simulation.__init__(
+            self, self.cmd, ip, lower_bound_port, upper_bound_port, gui, **kwargs
+        )
+        Basic_APF_Jackal_Kinova.__init__(
+            self, rs_address=self.robot_server_ip, **kwargs
+        )
 
 
 class Basic_APF_with_PD_Jackal_Kinova_Rob(Basic_APF_with_PD_Jackal_Kinova):
