@@ -87,6 +87,7 @@ class Basic_APF_Jackal_Kinova(gym.Env):
 
     real_robot = False
     laser_len = 811
+    laser_downsample_len = 32
     max_episode_steps = 150
 
     def __init__(self, rs_address=None, **kwargs):
@@ -94,20 +95,20 @@ class Basic_APF_Jackal_Kinova(gym.Env):
         self.apf_util = apf_env_utils.APF()
 
         # Using normalized action space
-        # KP, ETA
-        self.action_low = [0.01, 0.01, -1.5]
-        self.action_high = [1.0, 1.0, 1.5]
+        # # KP, ETA
+        # self.action_low = [1, 1, -10]
+        # self.action_high = [10, 10, 10]
 
         self.elapsed_steps = 0
         self.observation_space = self._get_observation_space()
 
         self.initialize()
-        self.action_space = spaces.Box(
-            low=np.array(self.action_low),
-            high=np.array(self.action_high),
-            dtype=np.float32,
-        )
-
+        # self.action_space = spaces.Box(
+        #     low=np.array(self.action_low),
+        #     high=np.array(self.action_high),
+        #     dtype=np.float32,
+        # )
+        self.action_space = spaces.MultiDiscrete([10, 10, 7])
         self.seed()
         self.distance_threshold = 0.3
         # Maximum linear velocity (m/s) of Robot
@@ -160,6 +161,7 @@ class Basic_APF_Jackal_Kinova(gym.Env):
         rs_state = np.zeros(self._get_robot_server_state_len())
 
         env_num = int(np.random.randint(0, len(start_points)))
+
         # Set Robot starting position
         if start_pose:
             assert len(start_pose) == 3
@@ -175,7 +177,7 @@ class Basic_APF_Jackal_Kinova(gym.Env):
             target_pose = self._get_target(env_num)
         rs_state[RS_TARGET : RS_TARGET + 3] = target_pose
 
-        self.max_episode_steps = e_lengths[env_num]
+        self.max_episode_steps = e_lengths[env_num] * 2
 
         # Set initial state of the Robot Server
         state_msg = robot_server_pb2.State(state=rs_state.tolist())
@@ -211,15 +213,32 @@ class Basic_APF_Jackal_Kinova(gym.Env):
         robot_coords = np.array([rs_state[RS_ROBOT_POSE], rs_state[RS_ROBOT_POSE + 1]])
         euclidean_dist_2d = np.linalg.norm(target_coords - robot_coords, axis=-1)
 
-        base_reward = -70.0 * euclidean_dist_2d
+        polar_r, att_theta = utils.cartesian_to_polar_2d(
+            x_target=0,
+            y_target=0,
+            x_origin=rs_state[RS_FORCES],
+            y_origin=rs_state[RS_FORCES + 1],
+        )
+
+        polar_r, rep_theta = utils.cartesian_to_polar_2d(
+            x_target=0,
+            y_target=0,
+            x_origin=rs_state[RS_FORCES + 3],
+            y_origin=rs_state[RS_FORCES + 4],
+        )
+
+        base_reward = -30.0 * euclidean_dist_2d
         if self.prev_base_reward is not None:
             reward = base_reward - self.prev_base_reward
         self.prev_base_reward = base_reward
 
         # Negative rewards
-
-        if action[2] < 0.02:
-            reward += 0.5
+        if abs(att_theta - rep_theta) < np.pi / 6:
+            if action[2] == 0.0:
+                reward -= 2.0
+        else:
+            if action[2] != 0.0:
+                reward -= 1.0
 
         if self.prev_rostime == 0.0:
             self.prev_rostime = rs_state[RS_ROSTIME]
@@ -243,8 +262,8 @@ class Basic_APF_Jackal_Kinova(gym.Env):
         self.prev_lin_vel = rs_state[RS_ROBOT_TWIST]
         self.prev_ang_vel = rs_state[RS_ROBOT_TWIST + 1]
 
-        # Long path length (episode length)
-        reward -= 0.7
+        # path length (episode length)
+        reward -= 60 / self.max_episode_steps
 
         if not self.real_robot:
             # End episode if robot is collides with an object.
@@ -293,7 +312,7 @@ class Basic_APF_Jackal_Kinova(gym.Env):
 
     def step(self, action):
         """Send action, get rs_state, and calculate reward"""
-        action = action.astype(np.float32)
+        action = action.astype(np.int)
 
         self.elapsed_steps += 1
 
@@ -333,9 +352,9 @@ class Basic_APF_Jackal_Kinova(gym.Env):
 
     def _denormalize_actions(self, action):
         rs_action = np.zeros(3, dtype=np.float32)
-        rs_action[0] = 200.0 * action[0]
-        rs_action[1] = 500.0 * action[1]
-        rs_action[2] = action[2]
+        rs_action[0] = 20.0 * (action[0] + 1)
+        rs_action[1] = 50.0 * (action[1] + 1)
+        rs_action[2] = -np.pi + (action[2] * np.pi / 3)
         return rs_action
 
     def _get_robot_server_state_len(self):
@@ -374,7 +393,7 @@ class Basic_APF_Jackal_Kinova(gym.Env):
         """
 
         target_polar_coordinates = [0.0] * 2
-        scan = [0.0] * self.laser_len
+        scan = [0.0] * self.laser_downsample_len
         weights = [0.0] * 2
         forces = [0.0] * 9
         robot_twist = [0.0] * 2  # Linear, Angular
@@ -433,10 +452,12 @@ class Basic_APF_Jackal_Kinova(gym.Env):
         # Rotate origin of polar coordinates frame to be matching with robot frame and normalize to +/- pi
         polar_theta = utils.normalize_angle_rad(polar_theta - rs_state[RS_ROBOT_POSE + 2])
 
+        laser = utils.downsample_list_to_len(rs_state[RS_SCAN : RS_SCAN + self.laser_len], self.laser_downsample_len)
+
         state = np.concatenate(
             (
                 np.array([polar_r, polar_theta]),
-                rs_state[RS_SCAN : RS_SCAN + self.laser_len],
+                laser,
                 rs_state[RS_WEIGHTS : RS_WEIGHTS + 2],
                 rs_state[RS_FORCES : RS_FORCES + 9],
                 rs_state[RS_ROBOT_TWIST : RS_ROBOT_TWIST + 2],
@@ -467,11 +488,11 @@ class Basic_APF_Jackal_Kinova(gym.Env):
         min_ang_vel = -self.apf_util.get_max_ang_vel() - vel_tolerance
 
         # LaserScan
-        max_laser = np.full(self.laser_len, np.inf)  # Using inf due to sensor noise
-        min_laser = np.full(self.laser_len, 0.0)
+        max_laser = np.full(self.laser_downsample_len, np.inf)  # Using inf due to sensor noise
+        min_laser = np.full(self.laser_downsample_len, 0.0)
 
         # Weights
-        max_weights = np.array([300, 500])
+        max_weights = np.array([np.inf, np.inf])
         min_weights = np.array([0, 0])
 
         # Attractive, Repulsive, Total Forces

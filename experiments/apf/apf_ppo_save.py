@@ -7,9 +7,9 @@ import os
 from datetime import datetime
 
 # specify the ip of the machine running the robot-server
-target_machine_ip = "192.168.0.32"  # or other xxx.xxx.xxx.xxx
+target_machine_ip = "163.180.177.101"  # or other xxx.xxx.xxx.xxx
 
-run_name = "basic_apf_PPO_1"
+run_name = "basic_apf_ppo_3"
 models_dir = "models/" + run_name
 
 logdir = "logs"
@@ -27,15 +27,13 @@ env.reset()
 # add wrapper for automatic exception handlingz
 env = ExceptionHandling(env)
 
-policy_kwarg = dict(
-    activation_fn=nn.ReLU, net_arch=[256, dict(pi=[256, 128], vf=[256, 128])]
-)
+policy_kwarg = dict(activation_fn=nn.Tanh, net_arch=[512, dict(pi=[512, 512], vf=[512, 512])])
 # choose and run appropriate algorithm provided by stable-baselines
 model = PPO(
     "MlpPolicy",
     env,
     policy_kwargs=policy_kwarg,
-    learning_rate=4e-4,
+    learning_rate=6e-5,
     verbose=1,
     tensorboard_log="./logs/",
 )
@@ -43,7 +41,7 @@ model = PPO(
 TIMESTEPS = 1000
 err_count = 0
 i = 1
-while i < 4000:
+while i < 1000:
     try:
         model.learn(
             total_timesteps=TIMESTEPS,
@@ -63,7 +61,7 @@ while i < 4000:
         print("Got an error while excueting learn(). Retrying...")
         env.close()
         del env
-        env = gym.make("Obstacle_Avoidance_Jackal_Kinova_Sim-v0", ip=target_machine_ip)
+        env = gym.make("Basic_APF_Jackal_Kinova_Sim-v0", ip=target_machine_ip)
         env.reset()
         env = ExceptionHandling(env)
 
