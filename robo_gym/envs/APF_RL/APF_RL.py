@@ -312,7 +312,7 @@ class Basic_APF_Jackal_Kinova(gym.Env):
 
     def step(self, action):
         """Send action, get rs_state, and calculate reward"""
-        action = action.astype(np.int)
+        action = action.astype(np.int32)
 
         self.elapsed_steps += 1
 
@@ -377,7 +377,9 @@ class Basic_APF_Jackal_Kinova(gym.Env):
         collision = [False]
         rostime = [0.0]
 
-        rs_state = target + apf_weights + scan + robot_pose + robot_twist + forces + collision + rostime
+        rs_state = (
+            target + apf_weights + scan + robot_pose + robot_twist + forces + collision + rostime
+        )
 
         return len(rs_state)
 
@@ -452,7 +454,9 @@ class Basic_APF_Jackal_Kinova(gym.Env):
         # Rotate origin of polar coordinates frame to be matching with robot frame and normalize to +/- pi
         polar_theta = utils.normalize_angle_rad(polar_theta - rs_state[RS_ROBOT_POSE + 2])
 
-        laser = utils.downsample_list_to_len(rs_state[RS_SCAN : RS_SCAN + self.laser_len], self.laser_downsample_len)
+        laser = utils.downsample_list_to_len(
+            rs_state[RS_SCAN : RS_SCAN + self.laser_len], self.laser_downsample_len
+        )
 
         state = np.concatenate(
             (
@@ -504,8 +508,12 @@ class Basic_APF_Jackal_Kinova(gym.Env):
         min_vel = np.array([min_lin_vel, min_ang_vel])
 
         # Definition of environment observation_space
-        obs_space_max = np.concatenate((max_target_coords, max_laser, max_weights, max_forces, max_vel))
-        obs_space_min = np.concatenate((min_target_coords, min_laser, min_weights, min_forces, min_vel))
+        obs_space_max = np.concatenate(
+            (max_target_coords, max_laser, max_weights, max_forces, max_vel)
+        )
+        obs_space_min = np.concatenate(
+            (min_target_coords, min_laser, min_weights, min_forces, min_vel)
+        )
 
         return spaces.Box(low=obs_space_min, high=obs_space_max, dtype=np.float32)
 
@@ -527,7 +535,11 @@ class Basic_APF_Jackal_Kinova(gym.Env):
         x = 9
         y = 6
 
-        if robot_coordinates[0] < -1 or robot_coordinates[0] > x or np.absolute(robot_coordinates[1]) > (y / 2):
+        if (
+            robot_coordinates[0] < -1
+            or robot_coordinates[0] > x
+            or np.absolute(robot_coordinates[1]) > (y / 2)
+        ):
             return True
         else:
             return False
@@ -636,10 +648,22 @@ class Basic_APF_Jackal_Kinova(gym.Env):
         return [x, y, yaw]
 
     def _is_valid_obstacle(self, obst_pose, rs_state):
-        if np.sqrt((obst_pose[0] - rs_state[RS_TARGET]) ** 2 + (obst_pose[1] - rs_state[RS_TARGET + 1]) ** 2) < 0.8:
+        if (
+            np.sqrt(
+                (obst_pose[0] - rs_state[RS_TARGET]) ** 2
+                + (obst_pose[1] - rs_state[RS_TARGET + 1]) ** 2
+            )
+            < 0.8
+        ):
             return False
         for i in range(0, len(self.sim_obstacles)):
-            if np.sqrt((self.sim_obstacles[i][0] - obst_pose[0]) ** 2 + (self.sim_obstacles[i][1] - obst_pose[1]) ** 2) < DIST_BTW_OBSTACLES:
+            if (
+                np.sqrt(
+                    (self.sim_obstacles[i][0] - obst_pose[0]) ** 2
+                    + (self.sim_obstacles[i][1] - obst_pose[1]) ** 2
+                )
+                < DIST_BTW_OBSTACLES
+            ):
                 return False
         return True
 
@@ -693,7 +717,17 @@ class Basic_APF_with_PD_Jackal_Kinova(Basic_APF_Jackal_Kinova):
         rostime = [0.0]
         pd_gains = [0.0] * 3
 
-        rs_state = target + apf_weights + scan + robot_pose + robot_twist + forces + [collision] + rostime + pd_gains
+        rs_state = (
+            target
+            + apf_weights
+            + scan
+            + robot_pose
+            + robot_twist
+            + forces
+            + [collision]
+            + rostime
+            + pd_gains
+        )
 
         return len(rs_state)
 

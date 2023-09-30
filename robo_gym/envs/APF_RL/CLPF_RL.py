@@ -28,36 +28,26 @@ RS_DETECTED_OBS = RS_ROSTIME + 1
 RS_PDGAINS = RS_DETECTED_OBS + 1
 
 start_points = [
-    [14.0, 15.0, -np.pi],
-    [7.5, 7.0, np.pi / 2],
-    [7.5, 3.0, 0],
-    [7.5, -3.0, 0],
-    [6.0, 1.75, -np.pi],
-    [3.0, 16.7, -np.pi / 2],
-    [-6.0, 1.5, np.pi / 2],
-    [8.0, -9.0, 0],
-    [8.0, -15.0, 0],
-    [6.0, -1.75, -np.pi],
-    [3.0, -4.5, -np.pi / 2],
-    [-6.0, -1.5, -np.pi],
+    [1.5, 10.0, 0.0],
+    [1.5, 4.0, 0.0],
+    [1.5, -4.0, 0.0],
+    [1.5, -10.0, 0.0],
+    [-9.5, 10.0, 0.0],
+    [-9.5, 4.0, np.pi / 2],
+    [-9.5, -4.0, 0.0],
+    [-9.5, -10.0, 0.0],
 ]
 
 target_points = [
-    [8.0, 15.0, 0],
-    [14.0, 7.0, 0],
-    [14.0, 5.0, 0],
-    [11.0, -3.0, 0],
-    [-2.75, 17.0, 0],
-    [3.0, 4.5, 0],
-    [-14.0, 17.0, 0],
-    [14.0, -9.0, 0],
-    [14.0, -16.0, 0],
-    [-2.75, -17.0, -np.pi],
-    [3.0, -16.7, 0],
-    [-14.0, -17.0, -np.pi],
+    [8.75, 10.0, 0.0],
+    [8.75, 4.0, 0.0],
+    [8.75, -4.0, 0.0],
+    [8.75, -3.0, 0.0],
+    [-2.75, 10.0, 0.0],
+    [-2.75, 3.0, 0.0],
+    [-2.75, -4.0, 0.0],
+    [-2.75, -10.0, 0.0],
 ]
-
-e_lengths = [300, 300, 300, 300, 600, 500, 800, 300, 300, 600, 500, 800]
 
 
 class Clustered_APF_Jackal_Kinova(gym.Env):
@@ -81,7 +71,7 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
     real_robot = False
     laser_len = 811
     laser_downsample_len = 32
-    max_episode_steps = 1024
+    max_episode_steps = 300
 
     def __init__(self, rs_address=None, **kwargs):
         self.jackal_kinova = jackal_kinova_utils.Jackal_Kinova()
@@ -154,7 +144,7 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
         self.state = np.zeros(self._get_env_state_len())
         rs_state = np.zeros(self._get_robot_server_state_len())
 
-        env_num = int(np.random.randint(0, len(start_points)))
+        env_num = int(np.random.randint(0, 4))
         # Set Robot starting position
         if start_pose:
             assert len(start_pose) == 3
@@ -170,7 +160,6 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
             target_pose = self._get_target(env_num)
         rs_state[RS_TARGET : RS_TARGET + 3] = target_pose
 
-        self.max_episode_steps = e_lengths[env_num] * 2
         # Set initial state of the Robot Server
         state_msg = robot_server_pb2.State(state=rs_state.tolist())
         if not self.client.set_state_msg(state_msg):
@@ -304,7 +293,7 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
 
     def step(self, action):
         """Send action, get rs_state, and calculate reward"""
-        action = action.astype(np.int)
+        action = action.astype(np.int32)
 
         self.elapsed_steps += 1
 
@@ -365,11 +354,21 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
         robot_pose = [0.0] * 3
         robot_twist = [0.0] * 2
         forces = [0.0] * 9
-        collision = False
+        collision = [False]
         rostime = [0.0]
         detected_obs = [0.0]
 
-        rs_state = target + apf_weights + scan + robot_pose + robot_twist + forces + [collision] + rostime + detected_obs
+        rs_state = (
+            target
+            + apf_weights
+            + scan
+            + robot_pose
+            + robot_twist
+            + forces
+            + collision
+            + rostime
+            + detected_obs
+        )
 
         return len(rs_state)
 
@@ -489,7 +488,9 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
         )
         # Rotate origin of polar coordinates frame to be matching with robot frame and normalize to +/- pi
         polar_theta = utils.normalize_angle_rad(polar_theta - rs_state[RS_ROBOT_POSE + 2])
-        laser = utils.downsample_list_to_len(rs_state[RS_SCAN : RS_SCAN + self.laser_len], self.laser_downsample_len)
+        laser = utils.downsample_list_to_len(
+            rs_state[RS_SCAN : RS_SCAN + self.laser_len], self.laser_downsample_len
+        )
 
         state = np.concatenate(
             (
@@ -585,7 +586,11 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
         width = 20
         height = 14
 
-        if robot_coordinates[0] < -2 or robot_coordinates[0] > width or np.absolute(robot_coordinates[1]) > (height / 2):
+        if (
+            robot_coordinates[0] < -2
+            or robot_coordinates[0] > width
+            or np.absolute(robot_coordinates[1]) > (height / 2)
+        ):
             return True
         else:
             return False
@@ -620,7 +625,7 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
             bool: True if any of the laser readings is below the threshold.
 
         """
-        threshold = 0.05
+        threshold = 0.2
         if min(rs_state[RS_SCAN : RS_SCAN + self.laser_len]) < threshold:
             return True
         else:
@@ -645,7 +650,11 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
         safety_radius = 0.9
 
         robot_close_to_obstacle = False
-        robot_corners = self.jackal_kinova.get_corners_positions(rs_state[RS_ROBOT_POSE], rs_state[RS_ROBOT_POSE + 1], rs_state[RS_ROBOT_POSE + 2])
+        robot_corners = self.jackal_kinova.get_corners_positions(
+            rs_state[RS_ROBOT_POSE],
+            rs_state[RS_ROBOT_POSE + 1],
+            rs_state[RS_ROBOT_POSE + 2],
+        )
 
         for corner in robot_corners:
             for obstacle_coord in self.sim_obstacles:
@@ -688,13 +697,19 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
             return True
         else:
             for i in range(0, len(self.sim_obstacles)):
-                if np.sqrt((self.sim_obstacles[i][0] - obst_pose[0]) ** 2 + (self.sim_obstacles[i][1] - obst_pose[1]) ** 2) < DIST_BTW_OBSTACLES:
+                if (
+                    np.sqrt(
+                        (self.sim_obstacles[i][0] - obst_pose[0]) ** 2
+                        + (self.sim_obstacles[i][1] - obst_pose[1]) ** 2
+                    )
+                    < DIST_BTW_OBSTACLES
+                ):
                     return False
             return True
 
 
 class Clustered_APF_Jackal_Kinova_Sim(Clustered_APF_Jackal_Kinova, Simulation):
-    cmd = "roslaunch apf_robot_server sim_clpf_robot_server.launch world_name:=learning_world_4.world"
+    cmd = "roslaunch apf_robot_server sim_clpf_robot_server.launch world_name:=final_rooms.world"
 
     def __init__(self, ip=None, lower_bound_port=None, upper_bound_port=None, gui=True, **kwargs):
         Simulation.__init__(self, self.cmd, ip, lower_bound_port, upper_bound_port, gui, **kwargs)
@@ -746,7 +761,19 @@ class Clustered_APF_with_PD_Jackal_Kinova(Clustered_APF_Jackal_Kinova):
         detected_obs = [0]
         pd_gains = [0.0 for i in range(0, 3)]
 
-        rs_state = target + apf_weights + scan + robot_pose + robot_twist + forces + [collision] + obstacles + rostime + detected_obs + pd_gains
+        rs_state = (
+            target
+            + apf_weights
+            + scan
+            + robot_pose
+            + robot_twist
+            + forces
+            + [collision]
+            + obstacles
+            + rostime
+            + detected_obs
+            + pd_gains
+        )
 
         return len(rs_state)
 
@@ -756,7 +783,9 @@ class Clustered_APF_with_PD_Jackal_Kinova_Sim(Clustered_APF_with_PD_Jackal_Kinov
 
     def __init__(self, ip=None, lower_bound_port=None, upper_bound_port=None, gui=True, **kwargs):
         Simulation.__init__(self, self.cmd, ip, lower_bound_port, upper_bound_port, gui, **kwargs)
-        Clustered_APF_with_PD_Jackal_Kinova.__init__(self, rs_address=self.robot_server_ip, **kwargs)
+        Clustered_APF_with_PD_Jackal_Kinova.__init__(
+            self, rs_address=self.robot_server_ip, **kwargs
+        )
 
 
 class Clustered_APF_with_PD_Jackal_Kinova_Rob(Clustered_APF_with_PD_Jackal_Kinova):
