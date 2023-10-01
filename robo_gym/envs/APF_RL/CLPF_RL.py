@@ -42,7 +42,7 @@ target_points = [
     [8.75, 10.0, 0.0],
     [8.75, 4.0, 0.0],
     [8.75, -4.0, 0.0],
-    [8.75, -3.0, 0.0],
+    [8.75, -10.0, 0.0],
     [-2.75, 10.0, 0.0],
     [-2.75, 3.0, 0.0],
     [-2.75, -4.0, 0.0],
@@ -232,10 +232,16 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
             # r = 10 * (abs(rs_state[RS_ROBOT_TWIST] - self.prev_lin_vel) + abs(rs_state[RS_ROBOT_TWIST] - self.prev_ang_vel))
 
             # 2: Discrete Penalty
-            # if abs(rs_state[RS_ROBOT_TWIST] - self.prev_lin_vel) / timediff > self.apf_util.get_max_lin_acc():
-            #     r = 5
-            # if abs(rs_state[RS_ROBOT_TWIST + 1] - self.prev_ang_vel) / timediff > self.apf_util.get_max_ang_acc():
-            #     r = 5
+            if (
+                abs(rs_state[RS_ROBOT_TWIST] - self.prev_lin_vel) / timediff
+                > self.apf_util.get_max_lin_acc()
+            ):
+                r = 0.5
+            if (
+                abs(rs_state[RS_ROBOT_TWIST + 1] - self.prev_ang_vel) / timediff
+                > self.apf_util.get_max_ang_acc()
+            ):
+                r = 0.5
 
             # reward -= r
             self.prev_rostime = rs_state[RS_ROSTIME]
@@ -244,7 +250,7 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
         self.prev_ang_vel = rs_state[RS_ROBOT_TWIST + 1]
 
         # path length (episode length)
-        reward -= 60.0 / self.max_episode_steps
+        # reward -= 60.0 / self.max_episode_steps
 
         if not self.real_robot:
             # End episode if robot is collides with an object.
@@ -332,7 +338,7 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
     def _denormalize_actions(self, action):
         rs_action = np.zeros(4, dtype=np.float32)
         rs_action[0] = 20.0 * (action[0] + 1)
-        rs_action[1] = 50.0 * (action[1] + 1)
+        rs_action[1] = 20.0 * (action[1] + 1)
         rs_action[2] = -np.pi + (action[2] * np.pi / 3)
         rs_action[3] = (action[3] + 1) / 100.0
         return rs_action
