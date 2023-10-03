@@ -33,7 +33,7 @@ start_points = [
     [1.5, -4.0, 0.0],
     [1.5, -10.0, 0.0],
     [-9.5, 10.0, 0.0],
-    [-9.5, 4.0, np.pi / 2],
+    [-9.5, 4.0, 0],
     [-9.5, -4.0, 0.0],
     [-9.5, -10.0, 0.0],
 ]
@@ -86,7 +86,7 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
 
         self.initialize()
 
-        self.action_space = spaces.MultiDiscrete([10, 10, 7, 100])
+        self.action_space = spaces.MultiDiscrete([4, 5, 7, 100])
         self.seed()
         self.distance_threshold = 0.3
 
@@ -144,7 +144,9 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
         self.state = np.zeros(self._get_env_state_len())
         rs_state = np.zeros(self._get_robot_server_state_len())
 
-        env_num = int(np.random.randint(0, 4))
+        env_num = int(np.random.randint(0, 5))
+        if env_num == 4:
+            env_num = 5
         # Set Robot starting position
         if start_pose:
             assert len(start_pose) == 3
@@ -214,12 +216,12 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
         self.prev_base_reward = base_reward
 
         # Negative rewards
-        # if abs(att_theta - rep_theta) < np.pi / 6:
-        #     if action[2] == 0.0:
-        #         reward -= 2.0
-        # else:
-        #     if action[2] != 0.0:
-        #         reward -= 1.0
+        if abs(att_theta - rep_theta) < np.pi / 6:
+            if action[2] == 0.0:
+                reward -= 2.0
+        else:
+            if action[2] != 0.0:
+                reward -= 1.0
 
         if self.prev_rostime == 0.0:
             self.prev_rostime = rs_state[RS_ROSTIME]
@@ -243,8 +245,16 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
             ):
                 r = 0.5
 
-            # reward -= r
+            reward -= r
             self.prev_rostime = rs_state[RS_ROSTIME]
+
+        if rs_state[RS_DETECTED_OBS] > 5:
+            if action[2] < 150:
+                reward += 2
+
+        if rs_state[RS_DETECTED_OBS] < 5:
+            if action[2] > 200:
+                reward += 2
 
         self.prev_lin_vel = rs_state[RS_ROBOT_TWIST]
         self.prev_ang_vel = rs_state[RS_ROBOT_TWIST + 1]
@@ -337,8 +347,10 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
 
     def _denormalize_actions(self, action):
         rs_action = np.zeros(4, dtype=np.float32)
-        rs_action[0] = 20.0 * (action[0] + 1)
-        rs_action[1] = 20.0 * (action[1] + 1)
+        att = [60, 120, 180, 240]
+        rep = [50, 100, 150, 200, 250]
+        rs_action[0] = 60.0 * (action[0] + 1)
+        rs_action[1] = 50.0 * (action[1] + 1)
         rs_action[2] = -np.pi + (action[2] * np.pi / 3)
         rs_action[3] = (action[3] + 1) / 100.0
         return rs_action
