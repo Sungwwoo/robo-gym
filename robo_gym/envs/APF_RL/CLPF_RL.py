@@ -70,8 +70,9 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
 
     real_robot = False
     laser_len = 811
-    laser_downsample_len = 32
-    max_episode_steps = 300
+    laser_downsample_len = 128
+    max_episode_steps = 600
+    learning = True
 
     def __init__(self, rs_address=None, **kwargs):
         self.jackal_kinova = jackal_kinova_utils.Jackal_Kinova()
@@ -103,6 +104,13 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
 
         self.acc_penalty = 0.0
         self.zero_vel_penalty = 0.0
+
+        # Logging variables for experiment
+        if not self.learning:
+            self.path_length = 0.0
+            self.total_acc_lin = 0.0
+            self.total_acc_ang = 0.0
+            self.prev_base_pose = np.array([0.0, 0.0, 0.0])
 
         # Connect to Robot Server
         if rs_address:
@@ -139,14 +147,15 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
         self.prev_ang_vel = 0.0
         self.episode_start_time = 0.0
         self.prev_rostime = 0.0
+        self.acc_lin = 0.0
+        self.acc_ang = 0.0
 
         # Initialize environment state
         self.state = np.zeros(self._get_env_state_len())
         rs_state = np.zeros(self._get_robot_server_state_len())
 
-        env_num = int(np.random.randint(0, 5))
-        if env_num == 4:
-            env_num = 5
+        env_num = np.random.randint(0, 4)
+        # env_num = 2
         # Set Robot starting position
         if start_pose:
             assert len(start_pose) == 3
@@ -196,6 +205,7 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
         robot_coords = np.array([rs_state[RS_ROBOT_POSE], rs_state[RS_ROBOT_POSE + 1]])
         euclidean_dist_2d = np.linalg.norm(target_coords - robot_coords, axis=-1)
 
+        # Calculate Attractive, Repulsive force direction
         polar_r, att_theta = utils.cartesian_to_polar_2d(
             x_target=0,
             y_target=0,
@@ -210,52 +220,62 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
             y_origin=rs_state[RS_FORCES + 4],
         )
 
-        base_reward = -30.0 * euclidean_dist_2d
+        base_reward = -60.0 * euclidean_dist_2d
         if self.prev_base_reward is not None:
             reward = base_reward - self.prev_base_reward
         self.prev_base_reward = base_reward
 
         # Negative rewards
-        if abs(att_theta - rep_theta) < np.pi / 6:
-            if action[2] == 0.0:
-                reward -= 2.0
-        else:
-            if action[2] != 0.0:
-                reward -= 1.0
+
+        # Attractive force offset
+        # if abs(att_theta - rep_theta) < np.pi / 6:
+        #     if action[2] == 0.0:
+        #         reward -= 2.0
+        # else:
+        #     if action[2] != 0.0:
+        #         reward -= 1.0
 
         if self.prev_rostime == 0.0:
             self.prev_rostime = rs_state[RS_ROSTIME]
             self.episode_start_time = rs_state[RS_ROSTIME]
+            self.prev_base_pose = rs_state[RS_ROBOT_POSE : RS_ROBOT_POSE + 3]
         else:
             # High acceleration
             timediff = rs_state[RS_ROSTIME] - self.prev_rostime
+            self.acc_lin = abs(rs_state[RS_ROBOT_TWIST] - self.prev_lin_vel) / timediff
+            self.acc_ang = abs(rs_state[RS_ROBOT_TWIST + 1] - self.prev_ang_vel) / timediff
 
             # 1: Continous Penalty
             # r = 10 * (abs(rs_state[RS_ROBOT_TWIST] - self.prev_lin_vel) + abs(rs_state[RS_ROBOT_TWIST] - self.prev_ang_vel))
+            r = (abs(rs_state[RS_ROBOT_TWIST] - self.prev_lin_vel) / timediff) + (
+                abs(rs_state[RS_ROBOT_TWIST + 1] - self.prev_ang_vel) / timediff
+            )
 
             # 2: Discrete Penalty
-            if (
-                abs(rs_state[RS_ROBOT_TWIST] - self.prev_lin_vel) / timediff
-                > self.apf_util.get_max_lin_acc()
-            ):
-                r = 0.5
-            if (
-                abs(rs_state[RS_ROBOT_TWIST + 1] - self.prev_ang_vel) / timediff
-                > self.apf_util.get_max_ang_acc()
-            ):
-                r = 0.5
+            # if (
+            #     abs(rs_state[RS_ROBOT_TWIST] - self.prev_lin_vel) / timediff
+            #     > self.apf_util.get_max_lin_acc()
+            # ):
+            #     r = 0.5
+            # if (
+            #     abs(rs_state[RS_ROBOT_TWIST + 1] - self.prev_ang_vel) / timediff
+            #     > self.apf_util.get_max_ang_acc()
+            # ):
+            #     r = 0.5
 
+            if r > 0.5:
+                r = 0.5
             reward -= r
-            self.prev_rostime = rs_state[RS_ROSTIME]
 
         if rs_state[RS_DETECTED_OBS] > 5:
-            if action[2] < 150:
-                reward += 2
+            if action[2] > 150:
+                reward -= 0.5
 
         if rs_state[RS_DETECTED_OBS] < 5:
-            if action[2] > 200:
-                reward += 2
+            if action[2] < 200:
+                reward -= 0.5
 
+        self.prev_rostime = rs_state[RS_ROSTIME]
         self.prev_lin_vel = rs_state[RS_ROBOT_TWIST]
         self.prev_ang_vel = rs_state[RS_ROBOT_TWIST + 1]
 
@@ -265,7 +285,7 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
         if not self.real_robot:
             # End episode if robot is collides with an object.
             if self._sim_robot_collision(rs_state):
-                reward = -60.0
+                reward = -80.0
                 done = True
                 info["final_status"] = "collision"
                 print("collision occured")
@@ -349,8 +369,8 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
         rs_action = np.zeros(4, dtype=np.float32)
         att = [60, 120, 180, 240]
         rep = [50, 100, 150, 200, 250]
-        rs_action[0] = 60.0 * (action[0] + 1)
-        rs_action[1] = 50.0 * (action[1] + 1)
+        rs_action[0] = att[action[0]]
+        rs_action[1] = rep[action[1]]
         rs_action[2] = -np.pi + (action[2] * np.pi / 3)
         rs_action[3] = (action[3] + 1) / 100.0
         return rs_action
@@ -732,6 +752,10 @@ class Clustered_APF_Jackal_Kinova_Sim(Clustered_APF_Jackal_Kinova, Simulation):
     def __init__(self, ip=None, lower_bound_port=None, upper_bound_port=None, gui=True, **kwargs):
         Simulation.__init__(self, self.cmd, ip, lower_bound_port, upper_bound_port, gui, **kwargs)
         Clustered_APF_Jackal_Kinova.__init__(self, rs_address=self.robot_server_ip, **kwargs)
+
+
+class Clustered_APF_Jackal_Kinova_Sim_Experiment(Clustered_APF_Jackal_Kinova_Sim):
+    learning = False
 
 
 class Clustered_APF_Jackal_Kinova_Rob(Clustered_APF_Jackal_Kinova):
