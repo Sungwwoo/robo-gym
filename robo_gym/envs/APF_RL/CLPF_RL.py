@@ -25,6 +25,9 @@ RS_FORCES = RS_ROBOT_TWIST + 2
 RS_COLLISION = RS_FORCES + 9
 RS_ROSTIME = RS_COLLISION + 1
 RS_DETECTED_OBS = RS_ROSTIME + 1
+RS_DIST_MOVED = RS_DETECTED_OBS + 1
+RS_ACC_LIN = RS_DIST_MOVED + 1
+RS_ACC_ANG = RS_ACC_LIN + 1
 RS_PDGAINS = RS_DETECTED_OBS + 1
 
 start_points = [
@@ -105,12 +108,9 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
         self.acc_penalty = 0.0
         self.zero_vel_penalty = 0.0
 
-        # Logging variables for experiment
-        if not self.learning:
-            self.path_length = 0.0
-            self.total_acc_lin = 0.0
-            self.total_acc_ang = 0.0
-            self.prev_base_pose = np.array([0.0, 0.0, 0.0])
+        self.distance_moved = 0.0
+        self.total_acc_lin = 0.0
+        self.total_acc_ang = 0.0
 
         # Connect to Robot Server
         if rs_address:
@@ -147,6 +147,7 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
         self.prev_ang_vel = 0.0
         self.episode_start_time = 0.0
         self.prev_rostime = 0.0
+        self.distance_moved = 0.0
         self.acc_lin = 0.0
         self.acc_ang = 0.0
 
@@ -154,8 +155,8 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
         self.state = np.zeros(self._get_env_state_len())
         rs_state = np.zeros(self._get_robot_server_state_len())
 
-        env_num = np.random.randint(0, 4)
-        # env_num = 2
+        # env_num = np.random.randint(0, 4)
+        env_num = 7
         # Set Robot starting position
         if start_pose:
             assert len(start_pose) == 3
@@ -198,6 +199,10 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
         done = False
         info = {}
         r = 0.0
+
+        self.distance_moved += rs_state[RS_DIST_MOVED]
+        self.total_acc_lin += rs_state[RS_ACC_LIN]
+        self.total_acc_ang += rs_state[RS_ACC_ANG]
         # Reward base: Distance to target
 
         # Calculate distance to the target
@@ -206,19 +211,19 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
         euclidean_dist_2d = np.linalg.norm(target_coords - robot_coords, axis=-1)
 
         # Calculate Attractive, Repulsive force direction
-        polar_r, att_theta = utils.cartesian_to_polar_2d(
-            x_target=0,
-            y_target=0,
-            x_origin=rs_state[RS_FORCES],
-            y_origin=rs_state[RS_FORCES + 1],
-        )
+        # polar_r, att_theta = utils.cartesian_to_polar_2d(
+        #     x_target=0,
+        #     y_target=0,
+        #     x_origin=rs_state[RS_FORCES],
+        #     y_origin=rs_state[RS_FORCES + 1],
+        # )
 
-        polar_r, rep_theta = utils.cartesian_to_polar_2d(
-            x_target=0,
-            y_target=0,
-            x_origin=rs_state[RS_FORCES + 3],
-            y_origin=rs_state[RS_FORCES + 4],
-        )
+        # polar_r, rep_theta = utils.cartesian_to_polar_2d(
+        #     x_target=0,
+        #     y_target=0,
+        #     x_origin=rs_state[RS_FORCES + 3],
+        #     y_origin=rs_state[RS_FORCES + 4],
+        # )
 
         base_reward = -60.0 * euclidean_dist_2d
         if self.prev_base_reward is not None:
@@ -288,6 +293,9 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
                 reward = -80.0
                 done = True
                 info["final_status"] = "collision"
+                self.total_acc_lin = 0.0
+                self.total_acc_ang = 0.0
+                self.distance_moved = 0.0
                 print("collision occured")
                 print("Episode Length: ", str(self.elapsed_steps))
                 print()
@@ -299,6 +307,9 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
                 print("front blocked")
                 print("Episode Length: ", str(self.elapsed_steps))
                 print()
+                self.total_acc_lin = 0.0
+                self.total_acc_ang = 0.0
+                self.distance_moved = 0.0
 
             # if self._robot_outside_of_boundary_box(rs_state[RS_ROBOT_POSE : RS_ROBOT_POSE + 3]):
             #     reward = -30.0
@@ -313,6 +324,14 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
             done = True
             info["final_status"] = "success"
             info["elapsed_time"] = rs_state[RS_ROSTIME] - self.episode_start_time
+            info["acc_lin"] = self.total_acc_lin
+            info["acc_ang"] = self.total_acc_ang
+            info["distance_moved"] = self.distance_moved
+
+            self.total_acc_lin = 0.0
+            self.total_acc_ang = 0.0
+            self.distance_moved = 0.0
+
             print("Target Reached!")
             print("Episode Length: ", str(self.elapsed_steps))
             print()
@@ -324,6 +343,9 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
             print("max_step_exceeded")
             print("Distance from target: ", str(euclidean_dist_2d))
             print()
+            self.total_acc_lin = 0.0
+            self.total_acc_ang = 0.0
+            self.distance_moved = 0.0
 
         return reward, done, info
 
@@ -395,6 +417,9 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
         collision = [False]
         rostime = [0.0]
         detected_obs = [0.0]
+        distance_moved = [0.0]
+        acc_lin = [0.0]
+        acc_ang = [0.0]
 
         rs_state = (
             target
@@ -406,6 +431,9 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
             + collision
             + rostime
             + detected_obs
+            + distance_moved
+            + acc_lin
+            + acc_ang
         )
 
         return len(rs_state)
