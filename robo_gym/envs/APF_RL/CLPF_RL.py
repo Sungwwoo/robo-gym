@@ -92,7 +92,7 @@ class Clustered_APF_Jackal_Kinova(gym.Env):
 
         self.action_space = spaces.MultiDiscrete([4, 5, 7, 100])
         self.seed()
-        self.distance_threshold = 0.3
+        self.distance_threshold = 0.6
 
         # Maximum linear velocity (m/s) of Robot
         max_lin_vel = self.jackal_kinova.get_max_lin_vel()
@@ -788,6 +788,32 @@ class Clustered_APF_Jackal_Kinova_Sim_Experiment(Clustered_APF_Jackal_Kinova_Sim
 
 class Clustered_APF_Jackal_Kinova_Rob(Clustered_APF_Jackal_Kinova):
     real_robot = True
+
+    def _get_start_pose(self, env_num):
+        """Get initial robot coordinates.
+
+        For the real robot the initial coordinates are its current coordinates
+        whereas for the simulated robot the initial coordinates are
+        randomly generated.
+
+        Returns:
+            numpy.array: [x,y,yaw] robot initial coordinates.
+        """
+
+        return [0.0, 0.0, 0.0]
+
+    def _get_target(self, env_num):
+        """Generate coordinates of the target at a minimum distance from the robot.
+
+        Args:
+            robot_coordinates (list): [x,y,yaw] coordinates of the robot.
+
+        Returns:
+            numpy.array: [x,y,yaw] coordinates of the target.
+
+        """
+
+        return [4.0, 0.0, 0.0]
 
 
 class Clustered_APF_with_PD_Jackal_Kinova(Clustered_APF_Jackal_Kinova):
