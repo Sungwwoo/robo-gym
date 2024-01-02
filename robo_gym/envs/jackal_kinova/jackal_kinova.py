@@ -35,37 +35,28 @@ RS_COLLISION = RS_SCAN + 811  # Raser Scan Length
 RS_ROSTIME = RS_COLLISION + 1
 RS_OBSTACLES = RS_ROSTIME + 1
 
+
 start_points = [
-    [14.0, 15.0, -np.pi],
-    [8.0, 7.0, np.pi / 2],
-    [8.0, 3.0, 0],
-    [8.0, -3.0, 0],
-    [6.0, 1.75, -np.pi],
-    [3.0, 16.7, -np.pi / 2],
-    [-6.0, 1.5, 0],
-    [8.0, -9.0, 0],
-    [8.0, -15.0, 0],
-    [6.0, -1.75, -np.pi],
-    [3.0, -4.5, -np.pi / 2],
-    [-6.0, -1.5, -np.pi],
+    [1.5, 10.0, 0.0],
+    [1.5, 4.0, 0.0],
+    [1.5, -4.0, 0.0],
+    [1.5, -10.0, 0.0],
+    [-9.5, 10.0, 0.0],
+    [-9.5, 4.0, 0],
+    [-9.5, -4.0, 0.0],
+    [-9.5, -10.0, 0.0],
 ]
 
 target_points = [
-    [8.0, 15.0, 0],
-    [14.0, 7.0, 0],
-    [14.0, 5.0, 0],
-    [11.0, -3.0, 0],
-    [-2.75, 17.0, 0],
-    [3.0, 4.5, 0],
-    [-14.0, 17.0, 0],
-    [14.0, -9.0, 0],
-    [14.0, -16.0, 0],
-    [-2.75, -17.0, -np.pi],
-    [3.0, -16.7, 0],
-    [-14.0, -17.0, -np.pi],
+    [8.75, 10.0, 0.0],
+    [8.75, 4.0, 0.0],
+    [8.75, -4.0, 0.0],
+    [8.75, -10.0, 0.0],
+    [-2.75, 10.0, 0.0],
+    [-2.75, 3.0, 0.0],
+    [-2.75, -4.0, 0.0],
+    [-2.75, -10.0, 0.0],
 ]
-
-e_lengths = [150, 150, 150, 150, 400, 300, 500, 150, 150, 400, 300, 500]
 
 
 class No_Obstacle_Avoidance_Jackal_Kinova(gym.Env):
@@ -88,8 +79,8 @@ class No_Obstacle_Avoidance_Jackal_Kinova(gym.Env):
 
     real_robot = False
     laser_len = 811
-    downsample_len = 32
-    max_episode_steps = 150
+    downsample_len = 128
+    max_episode_steps = 600
 
     def __init__(self, rs_address=None, **kwargs):
         self.jackal_kinova = jackal_kinova_utils.Jackal_Kinova()
@@ -102,7 +93,9 @@ class No_Obstacle_Avoidance_Jackal_Kinova(gym.Env):
 
         self.elapsed_steps = 0
         self.observation_space = self._get_observation_space()
-        self.action_space = spaces.Box(low=np.array(action_low), high=np.array(action_high), dtype=np.float32)
+        self.action_space = spaces.Box(
+            low=np.array(action_low), high=np.array(action_high), dtype=np.float32
+        )
         self.seed()
         self.distance_threshold = 0.6
         self.min_target_dist = 1.0
@@ -549,7 +542,11 @@ class No_Obstacle_Avoidance_Jackal_Kinova(gym.Env):
         width = 9
         height = 6
 
-        if robot_coordinates[0] < -2 or robot_coordinates[0] > width or np.absolute(robot_coordinates[1]) > (height / 2):
+        if (
+            robot_coordinates[0] < -2
+            or robot_coordinates[0] > width
+            or np.absolute(robot_coordinates[1]) > (height / 2)
+        ):
             return True
         else:
             return False
@@ -644,6 +641,8 @@ class Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova):
         # Initialize environment state
         self.state = np.zeros(self._get_env_state_len())
         rs_state = np.zeros(self._get_robot_server_state_len())
+
+        env_num = np.random.randint(0, 4)
 
         # Set Robot starting position
         if start_pose:
@@ -912,16 +911,30 @@ class Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova):
         return [x, y, yaw]
 
     def _is_valid_obstacle(self, obst_pose, rs_state):
-        if np.sqrt((obst_pose[0] - rs_state[RS_TARGET]) ** 2 + (obst_pose[1] - rs_state[RS_TARGET + 1]) ** 2) < 0.8:
+        if (
+            np.sqrt(
+                (obst_pose[0] - rs_state[RS_TARGET]) ** 2
+                + (obst_pose[1] - rs_state[RS_TARGET + 1]) ** 2
+            )
+            < 0.8
+        ):
             return False
         for i in range(0, len(self.sim_obstacles)):
-            if np.sqrt((self.sim_obstacles[i][0] - obst_pose[0]) ** 2 + (self.sim_obstacles[i][1] - obst_pose[1]) ** 2) < DIST_BTW_OBSTACLES:
+            if (
+                np.sqrt(
+                    (self.sim_obstacles[i][0] - obst_pose[0]) ** 2
+                    + (self.sim_obstacles[i][1] - obst_pose[1]) ** 2
+                )
+                < DIST_BTW_OBSTACLES
+            ):
                 return False
         return True
 
 
 class Obstacle_Avoidance_Jackal_Kinova_Sim(Obstacle_Avoidance_Jackal_Kinova, Simulation):
-    cmd = "roslaunch jackal_kinova_robot_server sim_robot_server.launch world_name:=lab_6by9_obst_3.world"
+    cmd = (
+        "roslaunch jackal_kinova_robot_server sim_robot_server.launch world_name:=final_rooms.world"
+    )
 
     def __init__(self, ip=None, lower_bound_port=None, upper_bound_port=None, gui=True, **kwargs):
         Simulation.__init__(self, self.cmd, ip, lower_bound_port, upper_bound_port, gui, **kwargs)
@@ -993,7 +1006,7 @@ class Fixed_Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova
         self.state = np.zeros(self._get_env_state_len())
         rs_state = np.zeros(self._get_robot_server_state_len())
 
-        env_num = np.random.randint(0, len(start_points))
+        env_num = np.random.randint(0, 4)
         # Set Robot starting position
         if start_pose:
             assert len(start_pose) == 3
@@ -1008,8 +1021,6 @@ class Fixed_Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova
         else:
             target_pose = self._get_target(env_num)
         rs_state[RS_TARGET : RS_TARGET + 3] = target_pose
-
-        self.max_episode_steps = e_lengths[env_num]
 
         # Set initial state of the Robot Server
         state_msg = robot_server_pb2.State(state=rs_state.tolist())
@@ -1036,6 +1047,7 @@ class Fixed_Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova
         reward = 0
         done = False
         info = {}
+        r = 0.0
 
         # Reward base: Distance to target
 
@@ -1054,10 +1066,10 @@ class Fixed_Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova
             reward = base_reward - self.prev_base_reward
         self.prev_base_reward = base_reward
 
-        if abs(self.state[1]) < np.pi / 3:
-            reward += 1.3
-        else:
-            reward -= 1
+        # if abs(self.state[1]) < np.pi / 3:
+        #     reward += 1.3
+        # else:
+        #     reward -= 1
 
         # Negative rewards
         # if rs_state[RS_ROBOT_TWIST] < 0.01 and self.zero_vel_penalty > -200:
@@ -1078,27 +1090,34 @@ class Fixed_Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova
             self.prev_rostime = rs_state[RS_ROSTIME]
             self.episode_start_time = rs_state[RS_ROSTIME]
         else:
-            if self.acc_penalty > -200:
-                # High acceleration
-                # 1: Continous Penalty
-                # r = 10 * (abs(rs_state[RS_ROBOT_TWIST] - self.prev_lin_vel) + abs(rs_state[RS_ROBOT_TWIST] - self.prev_ang_vel))
+            timediff = rs_state[RS_ROSTIME] - self.prev_rostime
+            self.acc_lin = abs(rs_state[RS_ROBOT_TWIST] - self.prev_lin_vel) / timediff
+            self.acc_ang = abs(rs_state[RS_ROBOT_TWIST + 1] - self.prev_ang_vel) / timediff
 
-                # 2: Discrete Penalty
-                timediff = rs_state[RS_ROSTIME] - self.prev_rostime
-                # r = 5
-                # if abs(rs_state[RS_ROBOT_TWIST] - self.prev_lin_vel) / timediff > self.apf_util.get_max_lin_acc():
-                #     self.acc_penalty = self.acc_penalty - r
-                # if abs(rs_state[RS_ROBOT_TWIST + 1] - self.prev_ang_vel) / timediff > self.apf_util.get_max_ang_acc():
-                #     self.acc_penalty = self.acc_penalty - r
+            # High acceleration
+            # 1: Continous Penalty
+            # r = 10 * (abs(rs_state[RS_ROBOT_TWIST] - self.prev_lin_vel) + abs(rs_state[RS_ROBOT_TWIST] - self.prev_ang_vel))
+            r = (abs(rs_state[RS_ROBOT_TWIST] - self.prev_lin_vel) / timediff) + (
+                abs(rs_state[RS_ROBOT_TWIST + 1] - self.prev_ang_vel) / timediff
+            )
 
-                # reward = reward - r
-            self.prev_rostime = rs_state[RS_ROSTIME]
+            # 2: Discrete Penalty
+            # r = 5
+            # if abs(rs_state[RS_ROBOT_TWIST] - self.prev_lin_vel) / timediff > self.apf_util.get_max_lin_acc():
+            #     self.acc_penalty = self.acc_penalty - r
+            # if abs(rs_state[RS_ROBOT_TWIST + 1] - self.prev_ang_vel) / timediff > self.apf_util.get_max_ang_acc():
+            #     self.acc_penalty = self.acc_penalty - r
 
+            if r > 1.0:
+                r = 1.0
+            reward -= r
+
+        self.prev_rostime = rs_state[RS_ROSTIME]
         self.prev_lin_vel = rs_state[RS_ROBOT_TWIST]
         self.prev_ang_vel = rs_state[RS_ROBOT_TWIST + 1]
 
         # Long path length (episode length)
-        reward -= 0.7
+        # reward -= 0.7
 
         if not self.real_robot:
             # End episode if robot is collides with an object.
@@ -1204,12 +1223,18 @@ class Fixed_Obstacle_Avoidance_Jackal_Kinova(No_Obstacle_Avoidance_Jackal_Kinova
         return target_points[env_num]
 
 
-class Fixed_Obstacle_Avoidance_Jackal_Kinova_Sim(Fixed_Obstacle_Avoidance_Jackal_Kinova, Simulation):
-    cmd = "roslaunch jackal_kinova_robot_server sim_robot_server.launch world_name:=learning_world_4.world"
+class Fixed_Obstacle_Avoidance_Jackal_Kinova_Sim(
+    Fixed_Obstacle_Avoidance_Jackal_Kinova, Simulation
+):
+    cmd = (
+        "roslaunch jackal_kinova_robot_server sim_robot_server.launch world_name:=final_rooms.world"
+    )
 
     def __init__(self, ip=None, lower_bound_port=None, upper_bound_port=None, gui=True, **kwargs):
         Simulation.__init__(self, self.cmd, ip, lower_bound_port, upper_bound_port, gui, **kwargs)
-        Fixed_Obstacle_Avoidance_Jackal_Kinova.__init__(self, rs_address=self.robot_server_ip, **kwargs)
+        Fixed_Obstacle_Avoidance_Jackal_Kinova.__init__(
+            self, rs_address=self.robot_server_ip, **kwargs
+        )
 
 
 class Fixed_Obstacle_Avoidance_Jackal_Kinova_Rob(Fixed_Obstacle_Avoidance_Jackal_Kinova):
